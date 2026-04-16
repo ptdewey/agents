@@ -1,0 +1,7 @@
+[submodule "vendor/skill-deslop"]
+	path = vendor/skill-deslop
+	url = https://github.com/stephenturner/skill-deslop.git
+
+[submodule "vendor/skill-temporal-developer"]
+	path = vendor/skill-temporal-developer
+	url = https://github.com/ptdewey/skill-temporal-developer.git
