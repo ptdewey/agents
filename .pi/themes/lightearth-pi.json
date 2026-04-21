@@ -1,0 +1,84 @@
+{
+  "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+  "name": "lightearth-pi",
+  "vars": {
+    "fg": "#252F1E",
+    "bg": "#F0EBE1",
+    "bgAlt": "#F5F0E6",
+    "sel": "#DCD4C6",
+    "muted": "#6B6461",
+    "dim": "#A09890",
+
+    "red": "#B3664D",
+    "green": "#5F865F",
+    "yellow": "#77824A",
+    "orange": "#BB7844",
+    "magenta": "#B3854D",
+    "cyan": "#669977",
+    "warn": "#9A8030"
+  },
+  "colors": {
+    "accent": "cyan",
+    "border": "yellow",
+    "borderAccent": "cyan",
+    "borderMuted": "dim",
+    "success": "green",
+    "error": "red",
+    "warning": "warn",
+    "muted": "muted",
+    "dim": "dim",
+    "text": "fg",
+    "thinkingText": "muted",
+
+    "selectedBg": "sel",
+    "userMessageBg": "#E6E0D6",
+    "userMessageText": "fg",
+    "customMessageBg": "bgAlt",
+    "customMessageText": "fg",
+    "customMessageLabel": "magenta",
+    "toolPendingBg": "#E6E0D6",
+    "toolSuccessBg": "#DFE8D9",
+    "toolErrorBg": "#F0E1DB",
+    "toolTitle": "fg",
+    "toolOutput": "fg",
+
+    "mdHeading": "warn",
+    "mdLink": "cyan",
+    "mdLinkUrl": "muted",
+    "mdCode": "orange",
+    "mdCodeBlock": "green",
+    "mdCodeBlockBorder": "muted",
+    "mdQuote": "muted",
+    "mdQuoteBorder": "muted",
+    "mdHr": "dim",
+    "mdListBullet": "cyan",
+
+    "toolDiffAdded": "green",
+    "toolDiffRemoved": "red",
+    "toolDiffContext": "muted",
+
+    "syntaxComment": "dim",
+    "syntaxKeyword": "yellow",
+    "syntaxFunction": "orange",
+    "syntaxVariable": "fg",
+    "syntaxString": "green",
+    "syntaxNumber": "magenta",
+    "syntaxType": "cyan",
+    "syntaxOperator": "muted",
+    "syntaxPunctuation": "muted",
+
+    "thinkingOff": "dim",
+    "thinkingMinimal": "muted",
+    "thinkingLow": "yellow",
+    "thinkingMedium": "cyan",
+    "thinkingHigh": "orange",
+    "thinkingXhigh": "red",
+
+    "bashMode": "green"
+  },
+  "export": {
+    "pageBg": "bg",
+    "cardBg": "bgAlt",
+    "infoBg": "#E6E0D6"
+  }
+}
