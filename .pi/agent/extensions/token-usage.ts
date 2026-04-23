@@ -168,23 +168,11 @@ export default function tokenUsageExtension(pi: ExtensionAPI) {
       });
   };
 
-  const refreshStatus = (ctx: {
-    hasUI: boolean;
-    ui: { setStatus: (key: string, text: string | undefined) => void };
-  }) => {
-    if (!ctx.hasUI) return;
-    ctx.ui.setStatus(
-      "token-usage",
-      `${fmtInt(stats.totals.totalTokens)} tok: ${fmtMoney(stats.totals.costTotal)}`,
-    );
-  };
-
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async () => {
     stats = await loadStats(statsPath);
-    refreshStatus(ctx);
   });
 
-  pi.on("message_end", async (event, ctx) => {
+  pi.on("message_end", async (event) => {
     const message = event.message as {
       role?: string;
       usage?: Usage;
@@ -204,12 +192,11 @@ export default function tokenUsageExtension(pi: ExtensionAPI) {
     addUsage(stats.byProvider[provider], message.usage);
     addUsage(stats.byModel[modelKey], message.usage);
 
-    refreshStatus(ctx);
     queueSave();
   });
 
   pi.registerCommand("usage", {
-    description: "Show persistent token/cost usage stats. Args: reset | path",
+    description: "Show persistent token/cost usage stats. Use this instead of a status bar widget. Args: reset | path",
     handler: async (args, ctx) => {
       const cmd = args.trim().toLowerCase();
 
@@ -226,7 +213,6 @@ export default function tokenUsageExtension(pi: ExtensionAPI) {
         if (!confirmed) return;
 
         stats = zeroStats();
-        refreshStatus(ctx);
         queueSave();
         ctx.ui.notify("Token usage stats reset", "info");
         return;

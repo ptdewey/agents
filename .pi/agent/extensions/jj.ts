@@ -7,17 +7,165 @@
  * - Warns when git commands are used in jj repos
  */
 
+import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 const MAX_DESC_LENGTH = 50;
+
+function formatTokens(count: number): string {
+  if (count < 1000) return count.toString();
+  if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
+  if (count < 1000000) return `${Math.round(count / 1000)}k`;
+  if (count < 10000000) return `${(count / 1000000).toFixed(1)}M`;
+  return `${Math.round(count / 1000000)}M`;
+}
+
+function sanitizeStatusText(text: string): string {
+  return text
+    .replace(/[\r\n\t]/g, " ")
+    .replace(/ +/g, " ")
+    .trim();
+}
+
+function parseDiffLineStats(diff: string) {
+  let added = 0;
+  let removed = 0;
+  let modified = 0;
+  let pendingAdded = 0;
+  let pendingRemoved = 0;
+  let inHunk = false;
+
+  const flushPending = () => {
+    if (pendingAdded === 0 && pendingRemoved === 0) return;
+    const paired = Math.min(pendingAdded, pendingRemoved);
+    modified += paired;
+    added += Math.max(0, pendingAdded - paired);
+    removed += Math.max(0, pendingRemoved - paired);
+    pendingAdded = 0;
+    pendingRemoved = 0;
+  };
+
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("diff --git ") || line.startsWith("@@ ")) {
+      flushPending();
+      inHunk = line.startsWith("@@ ");
+      continue;
+    }
+    if (!inHunk || line.startsWith("+++ ") || line.startsWith("--- ")) continue;
+    if (line.startsWith("+")) {
+      pendingAdded += 1;
+    } else if (line.startsWith("-")) {
+      pendingRemoved += 1;
+    } else {
+      flushPending();
+    }
+  }
+
+  flushPending();
+  return { added, removed, modified };
+}
+
+function installJjFooter(ctx: ExtensionContext) {
+  if (!ctx.hasUI) return;
+
+  ctx.ui.setFooter((tui, theme, footerData) => {
+    const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
+
+    return {
+      dispose: unsubscribe,
+      invalidate() {},
+      render(width: number): string[] {
+        let pwd = ctx.sessionManager.getCwd();
+        const home = process.env.HOME || process.env.USERPROFILE;
+        if (home && pwd.startsWith(home)) {
+          pwd = `~${pwd.slice(home.length)}`;
+        }
+
+        const branch = footerData.getGitBranch();
+        if (branch) {
+          pwd = `${pwd} (${branch})`;
+        }
+
+        const sessionName = ctx.sessionManager.getSessionName();
+        if (sessionName) {
+          pwd = `${pwd} • ${sessionName}`;
+        }
+
+        const extensionStatuses = footerData.getExtensionStatuses();
+        const jjStatus = extensionStatuses.get("jj");
+        const left = theme.fg("dim", pwd);
+        const right = jjStatus ? sanitizeStatusText(jjStatus) : "";
+        const leftWidth = visibleWidth(left);
+        const rightWidth = visibleWidth(right);
+        const minGap = right ? 2 : 0;
+
+        let pwdLine: string;
+        if (right && leftWidth + minGap + rightWidth <= width) {
+          const padding = " ".repeat(width - leftWidth - rightWidth);
+          pwdLine = left + padding + right;
+        } else if (right) {
+          const maxLeftWidth = Math.max(1, width - rightWidth - minGap);
+          const truncatedLeft = truncateToWidth(left, maxLeftWidth, theme.fg("dim", "..."));
+          const padding = " ".repeat(Math.max(0, width - visibleWidth(truncatedLeft) - rightWidth));
+          pwdLine = truncatedLeft + padding + right;
+        } else {
+          pwdLine = truncateToWidth(left, width, theme.fg("dim", "..."));
+        }
+
+        let totalInput = 0;
+        let totalOutput = 0;
+        let totalCost = 0;
+        for (const entry of ctx.sessionManager.getBranch()) {
+          if (entry.type === "message" && entry.message.role === "assistant") {
+            const message = entry.message as AssistantMessage;
+            totalInput += message.usage.input;
+            totalOutput += message.usage.output;
+            totalCost += message.usage.cost.total;
+          }
+        }
+
+        const statsLeftParts = [];
+        if (totalInput) statsLeftParts.push(`↑${formatTokens(totalInput)}`);
+        if (totalOutput) statsLeftParts.push(`↓${formatTokens(totalOutput)}`);
+        if (totalCost) statsLeftParts.push(`$${totalCost.toFixed(3)}`);
+        const statsLeft = theme.fg("dim", statsLeftParts.join(" "));
+
+        const rightSide = theme.fg("dim", ctx.model?.id || "no-model");
+
+        let statsLine = statsLeft;
+        if (statsLeftParts.length > 0) {
+          const availableForLeft = Math.max(1, width - visibleWidth(rightSide) - 2);
+          const truncatedStatsLeft = truncateToWidth(statsLeft, availableForLeft, theme.fg("dim", "..."));
+          const padding = " ".repeat(Math.max(1, width - visibleWidth(truncatedStatsLeft) - visibleWidth(rightSide)));
+          statsLine = truncatedStatsLeft + padding + rightSide;
+        } else {
+          const truncatedRight = truncateToWidth(rightSide, width, theme.fg("dim", "..."));
+          statsLine = " ".repeat(Math.max(0, width - visibleWidth(truncatedRight))) + truncatedRight;
+        }
+
+        const otherStatuses = Array.from(extensionStatuses.entries())
+          .filter(([key]) => key !== "jj")
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([, text]) => sanitizeStatusText(text));
+
+        const lines = [pwdLine, statsLine];
+        if (otherStatuses.length > 0) {
+          lines.push(truncateToWidth(otherStatuses.join(" "), width, theme.fg("dim", "...")));
+        }
+        return lines;
+      },
+    };
+  });
+}
 
 async function updateStatusWidget(pi: ExtensionAPI, ctx: ExtensionContext) {
   // Check if we're in a jj repo
   const { code } = await pi.exec("test", ["-d", ".jj"]);
   if (code !== 0) {
-    ctx.ui.setStatus("jj", "");
+    ctx.ui.setStatus("jj", undefined);
     return;
   }
 
@@ -32,18 +180,15 @@ async function updateStatusWidget(pi: ExtensionAPI, ctx: ExtensionContext) {
   ]);
   const [changeId, bookmarks, description] = info.trim().split("\n");
 
-  // Get file count from status
-  const { stdout: status } = await pi.exec("jj", ["st"]);
-  const fileChanges = status
-    .split("\n")
-    .filter((line) => /^[AMDR]\s/.test(line));
-  const fileCount = fileChanges.length;
+  // Get line counts from diff
+  const { stdout: diff } = await pi.exec("jj", ["diff", "--git", "--color=never"]);
+  const { added, removed, modified } = parseDiffLineStats(diff);
 
   // Build status line
   let statusLine = changeId || "???";
 
-  if (fileCount > 0) {
-    statusLine += ` +${fileCount}`;
+  if (added || removed || modified) {
+    statusLine += ` +${added}/-${removed}/~${modified}`;
   }
 
   if (bookmarks) {
@@ -186,12 +331,16 @@ ${status.trim()}
 
   // Update status widget on session start
   pi.on("session_start", async (_event, ctx) => {
+    const { code } = await pi.exec("test", ["-d", ".jj"]);
+    if (code === 0) {
+      installJjFooter(ctx);
+    }
     await updateStatusWidget(pi, ctx);
   });
 
-  // Update status widget after jj tool calls
+  // Update status widget after tool calls that may change the working copy
   pi.on("tool_execution_end", async (event, ctx) => {
-    if (event.toolName === "jj") {
+    if (["jj", "bash", "edit", "write"].includes(event.toolName)) {
       await updateStatusWidget(pi, ctx);
     }
   });
