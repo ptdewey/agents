@@ -1,0 +1,17 @@
+{
+  "name": "pi-notify",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node ./test-notify.js"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "node-notifier": "^10.0.1"
+  }
+}
