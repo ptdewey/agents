@@ -1,0 +1,15 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      # Host ports default to 14317/14318 to avoid colliding with a local Tempo
+      # or another collector already using the standard 4317/4318 ports.
+      - "${PI_OTEL_COLLECTOR_GRPC_PORT:-14317}:4317"
+      - "${PI_OTEL_COLLECTOR_HTTP_PORT:-14318}:4318"
+
+      # Prometheus-format metrics emitted by the collector exporter.
+      - "${PI_OTEL_COLLECTOR_PROM_PORT:-19464}:9464"
+    restart: unless-stopped
