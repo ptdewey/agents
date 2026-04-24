@@ -1,0 +1,33 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  # Prints received telemetry in the collector logs. Good enough for local smoke tests.
+  debug:
+    verbosity: normal
+
+  # Exposes received metrics in Prometheus scrape format at /metrics.
+  prometheus:
+    endpoint: 0.0.0.0:9464
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, prometheus]
+
+    # Keep trace intake enabled; this smoke collector logs traces instead of
+    # forwarding them to Tempo.
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

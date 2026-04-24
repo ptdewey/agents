@@ -4,20 +4,28 @@ import type {
   ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 import { mkdir, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 /**
- * Pi OpenTelemetry metrics extension.
+ * Pi OpenTelemetry metrics/traces extension.
  *
  * Configure with environment variables:
  * - PI_OTEL_METRICS_EXPORTER=otlp|console|file|off (default: otlp)
- * - PI_OTEL_METRICS_ENDPOINT=http://localhost:4318/v1/metrics
+ * - PI_OTEL_METRICS_ENDPOINT=http://localhost:14318/v1/metrics
  * - PI_OTEL_METRICS_HEADERS='{"Authorization":"Bearer ..."}'
  * - PI_OTEL_METRICS_INTERVAL_MS=15000
  * - PI_OTEL_METRICS_SERVICE_NAME=pi-coding-agent
  * - PI_OTEL_METRICS_FILE=~/.pi/agent/otel-metrics.jsonl (for exporter=file)
  * - PI_OTEL_METRICS_DEBUG=1
+ * - PI_OTEL_TRACES_EXPORTER=otlp|console|file|off (default: otlp)
+ * - PI_OTEL_TRACES_ENDPOINT=http://localhost:14318/v1/traces
+ * - PI_OTEL_TRACES_HEADERS='{"Authorization":"Bearer ..."}'
+ * - PI_OTEL_TRACES_INTERVAL_MS=15000
+ * - PI_OTEL_TRACES_SERVICE_NAME=pi-coding-agent
+ * - PI_OTEL_TRACES_FILE=~/.pi/agent/otel-traces.jsonl (for exporter=file)
+ * - PI_OTEL_TRACES_DEBUG=1
  */
 
 type Attributes = Record<string, string | number | boolean | undefined>;
@@ -39,6 +47,41 @@ type GaugePoint = {
   value: number;
 };
 
+type SpanKind = "SPAN_KIND_INTERNAL" | "SPAN_KIND_CLIENT";
+
+type TraceEvent = {
+  name: string;
+  timeUnixNano: string;
+  attributes: Record<string, string | number | boolean>;
+};
+
+type TraceSpan = {
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  kind: SpanKind;
+  startTimeUnixNano: string;
+  endTimeUnixNano?: string;
+  attributes: Record<string, string | number | boolean>;
+  events: TraceEvent[];
+  status?: {
+    code: "STATUS_CODE_UNSET" | "STATUS_CODE_OK" | "STATUS_CODE_ERROR";
+    message?: string;
+  };
+};
+
+type TraceConfig = {
+  exporter: "otlp" | "console" | "file" | "off";
+  endpoint: string;
+  headers: Record<string, string>;
+  intervalMs: number;
+  serviceName: string;
+  serviceVersion: string;
+  file: string;
+  debug: boolean;
+};
+
 type Config = {
   exporter: "otlp" | "console" | "file" | "off";
   endpoint: string;
@@ -50,14 +93,20 @@ type Config = {
   debug: boolean;
 };
 
-const DEFAULT_ENDPOINT = "http://localhost:4318/v1/metrics";
+const DEFAULT_ENDPOINT = "http://localhost:14318/v1/metrics";
 const DEFAULT_FILE = join(homedir(), ".pi", "agent", "otel-metrics.jsonl");
+const DEFAULT_TRACE_ENDPOINT = "http://localhost:14318/v1/traces";
+const DEFAULT_TRACE_FILE = join(homedir(), ".pi", "agent", "otel-traces.jsonl");
 const DEFAULT_HISTOGRAM_BOUNDS_SECONDS = [
   0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60,
 ];
 
 function nowNs(): string {
   return (BigInt(Date.now()) * 1_000_000n).toString();
+}
+
+function randomHex(bytes: number): string {
+  return randomBytes(bytes).toString("hex");
 }
 
 function nowSeconds(startMs: number): number {
@@ -146,6 +195,31 @@ function loadConfig(): Config {
     serviceVersion: process.env.PI_OTEL_METRICS_SERVICE_VERSION || "unknown",
     file: expandPath(process.env.PI_OTEL_METRICS_FILE || DEFAULT_FILE),
     debug: envFlag("PI_OTEL_METRICS_DEBUG"),
+  };
+}
+
+function loadTraceConfig(): TraceConfig {
+  const exporter = (
+    process.env.PI_OTEL_TRACES_EXPORTER ?? "otlp"
+  ).toLowerCase();
+  return {
+    exporter:
+      exporter === "console" || exporter === "file" || exporter === "off"
+        ? exporter
+        : "otlp",
+    endpoint: process.env.PI_OTEL_TRACES_ENDPOINT || DEFAULT_TRACE_ENDPOINT,
+    headers: parseHeaders(process.env.PI_OTEL_TRACES_HEADERS),
+    intervalMs: envInt("PI_OTEL_TRACES_INTERVAL_MS", 15_000),
+    serviceName:
+      process.env.PI_OTEL_TRACES_SERVICE_NAME ||
+      process.env.PI_OTEL_METRICS_SERVICE_NAME ||
+      "pi-coding-agent",
+    serviceVersion:
+      process.env.PI_OTEL_TRACES_SERVICE_VERSION ||
+      process.env.PI_OTEL_METRICS_SERVICE_VERSION ||
+      "unknown",
+    file: expandPath(process.env.PI_OTEL_TRACES_FILE || DEFAULT_TRACE_FILE),
+    debug: envFlag("PI_OTEL_TRACES_DEBUG"),
   };
 }
 
@@ -300,6 +374,93 @@ class MetricsStore {
   }
 }
 
+class TraceStore {
+  private readonly active = new Map<string, TraceSpan>();
+  private finished: TraceSpan[] = [];
+
+  start(key: string, span: TraceSpan) {
+    const existing = this.active.get(key);
+    if (existing) {
+      this.end(key, {}, {
+        code: "STATUS_CODE_ERROR",
+        message: "replaced without end",
+      });
+    }
+    this.active.set(key, { ...span, events: span.events ?? [] });
+  }
+
+  addEvent(key: string, name: string, attributes: Attributes = {}) {
+    const span = this.active.get(key);
+    if (!span) return;
+    span.events.push({
+      name,
+      timeUnixNano: nowNs(),
+      attributes: cleanAttributes(attributes),
+    });
+  }
+
+  end(
+    key: string,
+    attributes: Attributes = {},
+    status?: TraceSpan["status"],
+  ) {
+    const span = this.active.get(key);
+    if (!span) return;
+    span.attributes = {
+      ...span.attributes,
+      ...cleanAttributes(attributes),
+    };
+    if (status) span.status = status;
+    span.endTimeUnixNano = nowNs();
+    this.active.delete(key);
+    this.finished.push(span);
+  }
+
+  drain(): TraceSpan[] {
+    const spans = this.finished;
+    this.finished = [];
+    return spans;
+  }
+
+  reset() {
+    this.active.clear();
+    this.finished = [];
+  }
+}
+
+function traceSpansToOtlp(resourceAttributes: Attributes, spans: TraceSpan[]) {
+  return {
+    resourceSpans: [
+      {
+        resource: {
+          attributes: otelAttributes(cleanAttributes(resourceAttributes)),
+        },
+        scopeSpans: [
+          {
+            scope: { name: "pi-otel-traces-extension", version: "1" },
+            spans: spans.map((span) => ({
+              traceId: span.traceId,
+              spanId: span.spanId,
+              parentSpanId: span.parentSpanId,
+              name: span.name,
+              kind: span.kind,
+              startTimeUnixNano: span.startTimeUnixNano,
+              endTimeUnixNano: span.endTimeUnixNano ?? nowNs(),
+              attributes: otelAttributes(span.attributes),
+              status: span.status,
+              events: span.events.map((event) => ({
+                timeUnixNano: event.timeUnixNano,
+                name: event.name,
+                attributes: otelAttributes(event.attributes),
+              })),
+            })),
+          },
+        ],
+      },
+    ],
+  };
+}
+
 async function exportMetrics(config: Config, payload: unknown): Promise<void> {
   switch (config.exporter) {
     case "off":
@@ -325,6 +486,37 @@ async function exportMetrics(config: Config, payload: unknown): Promise<void> {
       if (!response.ok) {
         throw new Error(
           `OTLP metrics export failed: HTTP ${response.status} ${response.statusText}`,
+        );
+      }
+    }
+  }
+}
+
+async function exportTraces(config: TraceConfig, payload: unknown): Promise<void> {
+  switch (config.exporter) {
+    case "off":
+      return;
+    case "console":
+      console.log(JSON.stringify(payload));
+      return;
+    case "file":
+      await mkdir(dirname(config.file), { recursive: true });
+      await writeFile(config.file, `${JSON.stringify(payload)}\n`, {
+        flag: "a",
+      });
+      return;
+    case "otlp": {
+      const response = await fetch(config.endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...config.headers,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(
+          `OTLP traces export failed: HTTP ${response.status} ${response.statusText}`,
         );
       }
     }
@@ -399,14 +591,25 @@ function modelAttributes(ctx: ExtensionContext | undefined) {
 
 export default function otelMetricsExtension(pi: ExtensionAPI) {
   const config = loadConfig();
+  const traceConfig = loadTraceConfig();
   const metrics = new MetricsStore();
+  const traces = new TraceStore();
   const toolStarts = new Map<string, number>();
   const turnStarts = new Map<number | string, number>();
   let agentStart: number | undefined;
   let flushInFlight: Promise<void> = Promise.resolve();
-  let lastExportError: string | undefined;
+  let lastMetricsExportError: string | undefined;
+  let lastTraceExportError: string | undefined;
+  let pendingTraceSpans: TraceSpan[] = [];
   let cwd = process.cwd();
   let sessionId = "unknown";
+  let sessionTraceId: string | undefined;
+  let sessionSpanId: string | undefined;
+  let agentSpanId: string | undefined;
+  let turnSpanId: string | undefined;
+  let turnSpanKey: string | undefined;
+  const providerSpanKeys: string[] = [];
+  const compactionSpanKeys: string[] = [];
 
   const resourceAttributes = () => ({
     "service.name": config.serviceName,
@@ -416,34 +619,134 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
     "pi.session.id": sessionId,
   });
 
-  const flush = async (ctx?: ExtensionContext) => {
-    if (config.exporter === "off") return;
-    flushInFlight = flushInFlight
-      .then(async () => {
-        const payload = metrics.toOtlp(resourceAttributes());
-        await exportMetrics(config, payload);
-        lastExportError = undefined;
-      })
-      .catch((error) => {
-        lastExportError =
-          error instanceof Error ? error.message : String(error);
-        if (config.debug) console.warn(`[otel-metrics] ${lastExportError}`);
-      });
+  const currentTraceId = () => sessionTraceId ?? randomHex(16);
+  const currentParentSpanId = () => turnSpanId ?? agentSpanId ?? sessionSpanId;
+
+  const startTraceSpan = (
+    key: string,
+    name: string,
+    kind: SpanKind,
+    attributes: Attributes = {},
+    parentSpanId: string | undefined = currentParentSpanId(),
+    traceId: string = currentTraceId(),
+  ) => {
+    const spanId = randomHex(8);
+    traces.start(key, {
+      traceId,
+      spanId,
+      parentSpanId,
+      name,
+      kind,
+      startTimeUnixNano: nowNs(),
+      attributes: cleanAttributes(attributes),
+      events: [],
+    });
+    return spanId;
+  };
+
+  const endTraceSpan = (
+    key: string | undefined,
+    attributes: Attributes = {},
+    status?: TraceSpan["status"],
+  ) => {
+    if (!key) return;
+    traces.end(key, attributes, status);
+  };
+
+  const flush = async (_ctx?: ExtensionContext) => {
+    if (config.exporter === "off" && traceConfig.exporter === "off") return;
+    flushInFlight = flushInFlight.then(async () => {
+      if (config.exporter !== "off") {
+        try {
+          const payload = metrics.toOtlp(resourceAttributes());
+          await exportMetrics(config, payload);
+          lastMetricsExportError = undefined;
+        } catch (error) {
+          lastMetricsExportError =
+            error instanceof Error ? error.message : String(error);
+          if (config.debug) {
+            console.warn(`[otel-metrics] ${lastMetricsExportError}`);
+          }
+        }
+      }
+
+      if (traceConfig.exporter !== "off") {
+        const drained = traces.drain();
+        const spans = [...pendingTraceSpans, ...drained];
+        pendingTraceSpans = [];
+        if (spans.length) {
+          try {
+            await exportTraces(
+              traceConfig,
+              traceSpansToOtlp(resourceAttributes(), spans),
+            );
+            lastTraceExportError = undefined;
+          } catch (error) {
+            lastTraceExportError =
+              error instanceof Error ? error.message : String(error);
+            pendingTraceSpans = spans;
+            if (traceConfig.debug) {
+              console.warn(`[otel-traces] ${lastTraceExportError}`);
+            }
+          }
+        }
+      }
+    });
     await flushInFlight;
   };
 
+  const closeOpenTraces = (
+    status: TraceSpan["status"] = { code: "STATUS_CODE_OK" },
+  ) => {
+    for (const toolCallId of Array.from(toolStarts.keys()).reverse()) {
+      endTraceSpan(`tool:${toolCallId}`, {}, status);
+      toolStarts.delete(toolCallId);
+    }
+    while (providerSpanKeys.length) {
+      endTraceSpan(providerSpanKeys.pop(), {}, status);
+    }
+    while (compactionSpanKeys.length) {
+      endTraceSpan(compactionSpanKeys.pop(), {}, status);
+    }
+    endTraceSpan(turnSpanKey, {}, status);
+    turnSpanKey = undefined;
+    turnSpanId = undefined;
+    turnStarts.clear();
+    agentStart = undefined;
+    endTraceSpan(agentSpanId ? "agent" : undefined, {}, status);
+    agentSpanId = undefined;
+    endTraceSpan(sessionSpanId ? "session" : undefined, {}, status);
+    sessionSpanId = undefined;
+    sessionTraceId = undefined;
+  };
+
   let interval: ReturnType<typeof setInterval> | undefined;
-  if (config.exporter !== "off") {
-    interval = setInterval(() => void flush(), config.intervalMs);
+  if (config.exporter !== "off" || traceConfig.exporter !== "off") {
+    interval = setInterval(() => void flush(), Math.min(config.intervalMs, traceConfig.intervalMs));
     interval.unref?.();
   }
 
   pi.on("session_start", async (event, ctx) => {
+    closeOpenTraces({ code: "STATUS_CODE_ERROR", message: "new session started" });
+    await flush(ctx);
     cwd = ctx.cwd;
     sessionId =
       ctx.sessionManager.getSessionId?.() ??
       ctx.sessionManager.getSessionFile?.() ??
       "unknown";
+    sessionTraceId = randomHex(16);
+    sessionSpanId = startTraceSpan(
+      "session",
+      "pi session",
+      "SPAN_KIND_INTERNAL",
+      {
+        reason: event.reason,
+        cwd: ctx.cwd,
+        session_id: sessionId,
+      },
+      undefined,
+      sessionTraceId,
+    );
     metrics.addCounter("pi.session.starts", 1, { reason: event.reason });
     metrics.setGauge("pi.up", 1);
   });
@@ -451,6 +754,12 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
   pi.on("agent_start", async (_event, ctx) => {
     agentStart = Date.now();
     metrics.addCounter("pi.agent.starts", 1, modelAttributes(ctx));
+    agentSpanId = startTraceSpan(
+      "agent",
+      "pi agent run",
+      "SPAN_KIND_INTERNAL",
+      modelAttributes(ctx),
+    );
   });
 
   pi.on("agent_end", async (_event, ctx) => {
@@ -466,12 +775,28 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
       );
       agentStart = undefined;
     }
+    endTraceSpan(
+      "agent",
+      {
+        ...modelAttributes(ctx),
+        status: "ok",
+      },
+      { code: "STATUS_CODE_OK" },
+    );
+    agentSpanId = undefined;
   });
 
   pi.on("turn_start", async (event, ctx) => {
     const key = event.turnIndex ?? turnStarts.size;
     turnStarts.set(key, Date.now());
     metrics.addCounter("pi.turn.starts", 1, modelAttributes(ctx));
+    turnSpanKey = `turn:${String(key)}`;
+    turnSpanId = startTraceSpan(
+      turnSpanKey,
+      "pi turn",
+      "SPAN_KIND_INTERNAL",
+      modelAttributes(ctx),
+    );
   });
 
   pi.on("turn_end", async (event, ctx) => {
@@ -487,6 +812,16 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
       turnStarts.delete(key);
     }
     metrics.addCounter("pi.turns", 1, modelAttributes(ctx));
+    endTraceSpan(
+      turnSpanKey,
+      {
+        ...modelAttributes(ctx),
+        turn_index: String(key),
+      },
+      { code: "STATUS_CODE_OK" },
+    );
+    turnSpanKey = undefined;
+    turnSpanId = undefined;
   });
 
   pi.on("message_end", async (event) => {
@@ -513,6 +848,10 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
   pi.on("tool_execution_start", async (event) => {
     toolStarts.set(event.toolCallId, Date.now());
     metrics.addCounter("pi.tool.starts", 1, { tool: event.toolName });
+    const key = `tool:${event.toolCallId}`;
+    startTraceSpan(key, "tool execution", "SPAN_KIND_CLIENT", {
+      tool: event.toolName,
+    });
   });
 
   pi.on("tool_execution_end", async (event) => {
@@ -529,10 +868,35 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
       });
       toolStarts.delete(event.toolCallId);
     }
+    endTraceSpan(
+      `tool:${event.toolCallId}`,
+      {
+        tool: event.toolName,
+        status,
+      },
+      event.isError
+        ? { code: "STATUS_CODE_ERROR", message: "tool execution failed" }
+        : { code: "STATUS_CODE_OK" },
+    );
+  });
+
+  pi.on("message_start", async (event, ctx) => {
+    if (event.message.role === "assistant") {
+      metrics.addCounter("pi.message.starts", 1, modelAttributes(ctx));
+    }
+  });
+
+  pi.on("message_update", async (event, ctx) => {
+    if (event.message.role === "assistant" && event.assistantMessageEvent) {
+      metrics.addCounter("pi.message.updates", 1, modelAttributes(ctx));
+    }
   });
 
   pi.on("before_provider_request", async (_event, ctx) => {
     metrics.addCounter("pi.provider.requests", 1, modelAttributes(ctx));
+    const key = `provider:${randomHex(4)}`;
+    providerSpanKeys.push(key);
+    startTraceSpan(key, "provider request", "SPAN_KIND_CLIENT", modelAttributes(ctx));
   });
 
   pi.on("after_provider_response", async (event, ctx) => {
@@ -540,19 +904,44 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
       ...modelAttributes(ctx),
       status_code: event.status,
     });
+    const key = providerSpanKeys.pop();
+    if (key) {
+      endTraceSpan(
+        key,
+        {
+          ...modelAttributes(ctx),
+          status_code: event.status,
+        },
+        event.status >= 400
+          ? { code: "STATUS_CODE_ERROR", message: `provider status ${event.status}` }
+          : { code: "STATUS_CODE_OK" },
+      );
+    }
   });
 
   pi.on("session_before_compact", async () => {
     metrics.addCounter("pi.compaction.starts", 1);
+    const key = `compaction:${randomHex(4)}`;
+    compactionSpanKeys.push(key);
+    startTraceSpan(key, "session compaction", "SPAN_KIND_INTERNAL");
   });
 
   pi.on("session_compact", async (event) => {
     metrics.addCounter("pi.compactions", 1, {
       from_extension: event.fromExtension,
     });
+    const key = compactionSpanKeys.pop();
+    endTraceSpan(
+      key,
+      {
+        from_extension: event.fromExtension,
+      },
+      { code: "STATUS_CODE_OK" },
+    );
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
+    closeOpenTraces();
     metrics.setGauge("pi.up", 0);
     if (interval) clearInterval(interval);
     await flush(ctx);
@@ -560,23 +949,36 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
 
   pi.registerCommand("otel-metrics", {
     description:
-      "Show or control OTel metrics exporter. Args: status | flush | reset | config",
+      "Show or control OTel metrics/traces exporter. Args: status | flush | reset | config",
     handler: async (args, ctx) => {
       const command = args.trim().toLowerCase() || "status";
       if (command === "flush") {
         await flush(ctx);
+        const error = lastMetricsExportError ?? lastTraceExportError;
         ctx.ui.notify(
-          lastExportError
-            ? `OTel metrics flush failed: ${lastExportError}`
-            : "OTel metrics flushed",
-          lastExportError ? "error" : "info",
+          error
+            ? `OTel telemetry flush failed: ${error}`
+            : "OTel telemetry flushed",
+          error ? "error" : "info",
         );
         return;
       }
       if (command === "reset") {
         metrics.reset();
+        traces.reset();
+        pendingTraceSpans = [];
+        toolStarts.clear();
+        turnStarts.clear();
+        agentStart = undefined;
+        sessionTraceId = undefined;
+        sessionSpanId = undefined;
+        agentSpanId = undefined;
+        turnSpanId = undefined;
+        turnSpanKey = undefined;
+        providerSpanKeys.length = 0;
+        compactionSpanKeys.length = 0;
         ctx.ui.notify(
-          "OTel metrics counters reset for this pi process",
+          "OTel telemetry state reset for this pi process",
           "info",
         );
         return;
@@ -586,18 +988,28 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
           customType: "otel-metrics",
           display: true,
           content: [
-            "OTel metrics configuration",
-            `exporter=${config.exporter}`,
-            `endpoint=${config.endpoint}`,
-            `intervalMs=${config.intervalMs}`,
-            `serviceName=${config.serviceName}`,
-            `serviceVersion=${config.serviceVersion}`,
-            `file=${config.file}`,
-            `headers=${Object.keys(config.headers).length ? Object.keys(config.headers).join(",") : "(none)"}`,
+            "OTel telemetry configuration",
+            `metricsExporter=${config.exporter}`,
+            `metricsEndpoint=${config.endpoint}`,
+            `metricsIntervalMs=${config.intervalMs}`,
+            `metricsServiceName=${config.serviceName}`,
+            `metricsServiceVersion=${config.serviceVersion}`,
+            `metricsFile=${config.file}`,
+            `metricsHeaders=${Object.keys(config.headers).length ? Object.keys(config.headers).join(",") : "(none)"}`,
+            "",
+            `tracesExporter=${traceConfig.exporter}`,
+            `tracesEndpoint=${traceConfig.endpoint}`,
+            `tracesIntervalMs=${traceConfig.intervalMs}`,
+            `tracesServiceName=${traceConfig.serviceName}`,
+            `tracesServiceVersion=${traceConfig.serviceVersion}`,
+            `tracesFile=${traceConfig.file}`,
+            `tracesHeaders=${Object.keys(traceConfig.headers).length ? Object.keys(traceConfig.headers).join(",") : "(none)"}`,
             "",
             "Change destination with env vars, e.g.:",
             "PI_OTEL_METRICS_ENDPOINT=http://collector:4318/v1/metrics",
+            "PI_OTEL_TRACES_ENDPOINT=http://collector:4318/v1/traces",
             "PI_OTEL_METRICS_EXPORTER=file PI_OTEL_METRICS_FILE=.tmp/pi-metrics.jsonl",
+            "PI_OTEL_TRACES_EXPORTER=file PI_OTEL_TRACES_FILE=.tmp/pi-traces.jsonl",
           ].join("\n"),
         });
         return;
@@ -607,11 +1019,14 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
         customType: "otel-metrics",
         display: true,
         content: [
-          "OTel metrics status",
+          "OTel telemetry status",
           metrics.summary(),
-          `exporter=${config.exporter}`,
-          `target=${config.exporter === "otlp" ? config.endpoint : config.exporter === "file" ? config.file : config.exporter}`,
-          `lastError=${lastExportError ?? "(none)"}`,
+          `metricsExporter=${config.exporter}`,
+          `metricsTarget=${config.exporter === "otlp" ? config.endpoint : config.exporter === "file" ? config.file : config.exporter}`,
+          `metricsLastError=${lastMetricsExportError ?? "(none)"}`,
+          `tracesExporter=${traceConfig.exporter}`,
+          `tracesTarget=${traceConfig.exporter === "otlp" ? traceConfig.endpoint : traceConfig.exporter === "file" ? traceConfig.file : traceConfig.exporter}`,
+          `tracesLastError=${lastTraceExportError ?? "(none)"}`,
           "",
           "Commands: /otel-metrics status | flush | reset | config",
         ].join("\n"),

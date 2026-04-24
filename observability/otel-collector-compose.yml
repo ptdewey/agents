@@ -3,7 +3,7 @@ services:
     image: otel/opentelemetry-collector-contrib:latest
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
-      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+      - ./otel-collector-smoke-config.yaml:/etc/otelcol/config.yaml:ro
     ports:
       # Host ports default to 14317/14318 to avoid colliding with a local Tempo
       # or another collector already using the standard 4317/4318 ports.

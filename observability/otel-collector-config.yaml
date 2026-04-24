@@ -10,13 +10,16 @@ processors:
   batch: {}
 
 exporters:
-  # Prints received telemetry in the collector logs. Good enough for local smoke tests.
   debug:
     verbosity: normal
 
-  # Exposes received metrics in Prometheus scrape format at /metrics.
   prometheus:
     endpoint: 0.0.0.0:9464
+
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
 
 service:
   pipelines:
@@ -25,9 +28,7 @@ service:
       processors: [batch]
       exporters: [debug, prometheus]
 
-    # Keep trace intake enabled so this collector can be reused when the Pi
-    # extension grows traces later. For now traces are just logged.
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [debug, otlp/tempo]
