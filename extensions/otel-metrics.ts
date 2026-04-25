@@ -211,6 +211,23 @@ function parseHeaders(raw: string | undefined): Record<string, string> {
   }
 }
 
+function normalizeOtlpEndpoint(
+  endpoint: string,
+  kind: "metrics" | "traces",
+): string {
+  const defaultPath = kind === "metrics" ? "/v1/metrics" : "/v1/traces";
+  try {
+    const url = new URL(endpoint);
+    if (url.pathname === "" || url.pathname === "/" || url.pathname === "/v1") {
+      url.pathname = defaultPath;
+      return url.toString();
+    }
+    return endpoint;
+  } catch {
+    return endpoint;
+  }
+}
+
 function loadConfig(): Config {
   const exporter = (
     process.env.PI_OTEL_METRICS_EXPORTER ?? "otlp"
@@ -220,7 +237,10 @@ function loadConfig(): Config {
       exporter === "console" || exporter === "file" || exporter === "off"
         ? exporter
         : "otlp",
-    endpoint: process.env.PI_OTEL_METRICS_ENDPOINT || DEFAULT_ENDPOINT,
+    endpoint: normalizeOtlpEndpoint(
+      process.env.PI_OTEL_METRICS_ENDPOINT || DEFAULT_ENDPOINT,
+      "metrics",
+    ),
     headers: parseHeaders(process.env.PI_OTEL_METRICS_HEADERS),
     intervalMs: envInt("PI_OTEL_METRICS_INTERVAL_MS", 15_000),
     serviceName: process.env.PI_OTEL_METRICS_SERVICE_NAME || "pi-coding-agent",
@@ -239,7 +259,10 @@ function loadTraceConfig(): TraceConfig {
       exporter === "console" || exporter === "file" || exporter === "off"
         ? exporter
         : "otlp",
-    endpoint: process.env.PI_OTEL_TRACES_ENDPOINT || DEFAULT_TRACE_ENDPOINT,
+    endpoint: normalizeOtlpEndpoint(
+      process.env.PI_OTEL_TRACES_ENDPOINT || DEFAULT_TRACE_ENDPOINT,
+      "traces",
+    ),
     headers: parseHeaders(process.env.PI_OTEL_TRACES_HEADERS),
     intervalMs: envInt("PI_OTEL_TRACES_INTERVAL_MS", 15_000),
     serviceName:
@@ -529,7 +552,7 @@ async function exportMetrics(config: Config, payload: unknown): Promise<void> {
       });
       if (!response.ok) {
         throw new Error(
-          `OTLP metrics export failed: HTTP ${response.status} ${response.statusText}`,
+          `OTLP metrics export failed: HTTP ${response.status} ${response.statusText} (${config.endpoint})`,
         );
       }
     }
@@ -560,7 +583,7 @@ async function exportTraces(config: TraceConfig, payload: unknown): Promise<void
       });
       if (!response.ok) {
         throw new Error(
-          `OTLP traces export failed: HTTP ${response.status} ${response.statusText}`,
+          `OTLP traces export failed: HTTP ${response.status} ${response.statusText} (${config.endpoint})`,
         );
       }
     }

@@ -48,16 +48,17 @@ Telemetry emitted includes:
 
 ### Local observability stack (Nix run target)
 
-A local Prometheus + Grafana + Tempo stack is included and runs natively via Nix.
+A local OTel Collector + Prometheus + Grafana + Tempo stack is included and runs natively via Nix (no Loki).
 
 ```bash
-# Starts: prometheus, tempo, grafana
+# Starts: otel-collector, prometheus, tempo, grafana
 nix run .#observability
 ```
 
-Point Pi traces at Tempo's OTLP/HTTP receiver (matches the extension's default port):
+Point Pi metrics + traces at the collector:
 
 ```bash
+export PI_OTEL_METRICS_ENDPOINT=http://localhost:14318/v1/metrics
 export PI_OTEL_TRACES_ENDPOINT=http://localhost:14318/v1/traces
 pi -e ./extensions/otel-metrics.ts
 ```
@@ -75,6 +76,7 @@ Port/user overrides are available via env vars before `nix run`:
 ```bash
 PI_OTEL_OTLP_HTTP_PORT=24318 \
 PI_OTEL_OTLP_GRPC_PORT=24317 \
+PI_OTEL_COLLECTOR_PROM_PORT=29464 \
 PI_PROMETHEUS_PORT=29090 \
 PI_PROMETHEUS_SCRAPE_TARGET=localhost:9101 \
 PI_GRAFANA_PORT=23000 \
