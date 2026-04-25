@@ -5,7 +5,7 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 import { mkdir, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 /**
@@ -40,6 +40,7 @@ type HistogramPoint = {
   count: number;
   sum: number;
   bucketCounts: number[];
+  unit: string;
 };
 
 type GaugePoint = {
@@ -111,6 +112,37 @@ function randomHex(bytes: number): string {
 
 function nowSeconds(startMs: number): number {
   return Math.max(0, (Date.now() - startMs) / 1000);
+}
+
+function projectNameFromCwd(cwd: string): string {
+  const name = basename(cwd);
+  return name || cwd || "unknown";
+}
+
+function contentChars(content: unknown): number {
+  if (typeof content === "string") return content.length;
+  if (Array.isArray(content)) {
+    return content.reduce((total, part) => total + contentChars(part), 0);
+  }
+  if (content && typeof content === "object") {
+    const record = content as Record<string, unknown>;
+    if (typeof record.text === "string") return record.text.length;
+    if ("content" in record) return contentChars(record.content);
+    if ("parts" in record) return contentChars(record.parts);
+  }
+  return 0;
+}
+
+function messageChars(message: { content?: unknown; text?: unknown }): number {
+  if (message.content !== undefined) return contentChars(message.content);
+  if (message.text !== undefined) return contentChars(message.text);
+  return 0;
+}
+
+function extensionAttribute(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
 }
 
 function cleanAttributes(
@@ -239,7 +271,12 @@ class MetricsStore {
     this.counters.set(key, { attributes: cleanAttributes(attributes), value });
   }
 
-  recordHistogram(name: string, value: number, attributes: Attributes = {}) {
+  recordHistogram(
+    name: string,
+    value: number,
+    attributes: Attributes = {},
+    unit = "1",
+  ) {
     const key = `${name}:${attributeKey(attributes)}`;
     let point = this.histograms.get(key);
     if (!point) {
@@ -250,6 +287,7 @@ class MetricsStore {
         bucketCounts: Array(DEFAULT_HISTOGRAM_BOUNDS_SECONDS.length + 1).fill(
           0,
         ),
+        unit,
       };
       this.histograms.set(key, point);
     }
@@ -310,20 +348,26 @@ class MetricsStore {
       });
     }
 
-    const histogramGroups = new Map<string, HistogramPoint[]>();
+    const histogramGroups = new Map<
+      string,
+      { points: HistogramPoint[]; unit: string }
+    >();
     for (const [key, point] of this.histograms) {
       const name = key.slice(0, key.indexOf(":"));
-      const group = histogramGroups.get(name) ?? [];
-      group.push(point);
-      histogramGroups.set(name, group);
+      const existing = histogramGroups.get(name);
+      if (existing) {
+        existing.points.push(point);
+      } else {
+        histogramGroups.set(name, { points: [point], unit: point.unit });
+      }
     }
-    for (const [name, points] of histogramGroups) {
+    for (const [name, group] of histogramGroups) {
       metrics.push({
         name,
-        unit: "s",
+        unit: group.unit,
         histogram: {
           aggregationTemporality: "AGGREGATION_TEMPORALITY_CUMULATIVE",
-          dataPoints: points.map((point) => ({
+          dataPoints: group.points.map((point) => ({
             attributes: otelAttributes(point.attributes),
             startTimeUnixNano: this.startTimeUnixNano,
             timeUnixNano,
@@ -608,6 +652,8 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
   let agentSpanId: string | undefined;
   let turnSpanId: string | undefined;
   let turnSpanKey: string | undefined;
+  let currentTurnPromptChars = 0;
+  let currentTurnResponseChars = 0;
   const providerSpanKeys: string[] = [];
   const compactionSpanKeys: string[] = [];
 
@@ -616,6 +662,7 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
     "service.version": config.serviceVersion,
     "process.pid": process.pid,
     "pi.cwd": cwd,
+    "pi.project": projectNameFromCwd(cwd),
     "pi.session.id": sessionId,
   });
 
@@ -712,6 +759,8 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
     turnSpanKey = undefined;
     turnSpanId = undefined;
     turnStarts.clear();
+    currentTurnPromptChars = 0;
+    currentTurnResponseChars = 0;
     agentStart = undefined;
     endTraceSpan(agentSpanId ? "agent" : undefined, {}, status);
     agentSpanId = undefined;
@@ -772,6 +821,7 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
         "pi.agent.duration",
         nowSeconds(agentStart),
         modelAttributes(ctx),
+        "s",
       );
       agentStart = undefined;
     }
@@ -790,6 +840,8 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
     const key = event.turnIndex ?? turnStarts.size;
     turnStarts.set(key, Date.now());
     metrics.addCounter("pi.turn.starts", 1, modelAttributes(ctx));
+    currentTurnPromptChars = 0;
+    currentTurnResponseChars = 0;
     turnSpanKey = `turn:${String(key)}`;
     turnSpanId = startTraceSpan(
       turnSpanKey,
@@ -808,6 +860,7 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
         "pi.turn.duration",
         nowSeconds(start),
         modelAttributes(ctx),
+        "s",
       );
       turnStarts.delete(key);
     }
@@ -817,11 +870,15 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
       {
         ...modelAttributes(ctx),
         turn_index: String(key),
+        prompt_chars: currentTurnPromptChars,
+        response_chars: currentTurnResponseChars,
       },
       { code: "STATUS_CODE_OK" },
     );
     turnSpanKey = undefined;
     turnSpanId = undefined;
+    currentTurnPromptChars = 0;
+    currentTurnResponseChars = 0;
   });
 
   pi.on("message_end", async (event) => {
@@ -831,14 +888,49 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
       provider?: string;
       model?: string;
       stopReason?: string;
+      content?: unknown;
+      text?: unknown;
+      fromExtension?: string;
     };
+
+    const extension =
+      extensionAttribute((event as { fromExtension?: unknown }).fromExtension) ??
+      extensionAttribute(message.fromExtension);
 
     metrics.addCounter("pi.messages", 1, {
       role: message.role ?? "unknown",
       provider: message.provider,
       model: message.model,
       stop_reason: message.stopReason,
+      extension,
     });
+
+    const chars = messageChars(message);
+    if (chars > 0) {
+      const sizeAttributes = {
+        role: message.role ?? "unknown",
+        provider: message.provider,
+        model: message.model,
+        extension,
+      };
+      if (message.role === "assistant") {
+        currentTurnResponseChars += chars;
+        metrics.recordHistogram(
+          "pi.response.chars",
+          chars,
+          sizeAttributes,
+          "{character}",
+        );
+      } else {
+        currentTurnPromptChars += chars;
+        metrics.recordHistogram(
+          "pi.prompt.chars",
+          chars,
+          sizeAttributes,
+          "{character}",
+        );
+      }
+    }
 
     if (message.role === "assistant" && message.usage) {
       recordUsage(metrics, message.usage, message);
@@ -862,10 +954,15 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
     });
     const start = toolStarts.get(event.toolCallId);
     if (start !== undefined) {
-      metrics.recordHistogram("pi.tool.duration", nowSeconds(start), {
-        tool: event.toolName,
-        status,
-      });
+      metrics.recordHistogram(
+        "pi.tool.duration",
+        nowSeconds(start),
+        {
+          tool: event.toolName,
+          status,
+        },
+        "s",
+      );
       toolStarts.delete(event.toolCallId);
     }
     endTraceSpan(
@@ -927,14 +1024,17 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_compact", async (event) => {
+    const extension = extensionAttribute(event.fromExtension);
     metrics.addCounter("pi.compactions", 1, {
       from_extension: event.fromExtension,
+      extension,
     });
     const key = compactionSpanKeys.pop();
     endTraceSpan(
       key,
       {
         from_extension: event.fromExtension,
+        extension,
       },
       { code: "STATUS_CODE_OK" },
     );
@@ -969,6 +1069,8 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
         pendingTraceSpans = [];
         toolStarts.clear();
         turnStarts.clear();
+        currentTurnPromptChars = 0;
+        currentTurnResponseChars = 0;
         agentStart = undefined;
         sessionTraceId = undefined;
         sessionSpanId = undefined;

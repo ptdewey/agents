@@ -22,25 +22,22 @@
             name = "pi-observability";
             runtimeInputs = [
               pkgs.coreutils
-              pkgs.gnused
               pkgs.grafana
-              pkgs.opentelemetry-collector-contrib
               pkgs.prometheus
               pkgs.tempo
             ];
             text = ''
               set -euo pipefail
 
-              root="$PWD"
-              if [ ! -f "$root/observability/otel-collector-config.yaml" ]; then
-                echo "Run this from the repository root (missing ./observability/otel-collector-config.yaml)." >&2
-                exit 1
-              fi
+              OTLP_HTTP_PORT="''${PI_OTEL_OTLP_HTTP_PORT:-14318}"
+              OTLP_GRPC_PORT="''${PI_OTEL_OTLP_GRPC_PORT:-14317}"
+              GRAFANA_PORT="''${PI_GRAFANA_PORT:-13000}"
+              PROMETHEUS_PORT="''${PI_PROMETHEUS_PORT:-19090}"
+              TEMPO_PORT="''${PI_TEMPO_PORT:-13200}"
+              SCRAPE_TARGET="''${PI_PROMETHEUS_SCRAPE_TARGET:-localhost:9101}"
 
               state_dir="$(mktemp -d -t pi-observability-XXXXXX)"
-              config_dir="$state_dir/observability"
 
-              # shellcheck disable=SC2317
               cleanup() {
                 echo "Shutting down observability stack..." >&2
                 # shellcheck disable=SC2046
@@ -49,64 +46,105 @@
               }
               trap cleanup EXIT INT TERM
 
-              cp -R "$root/observability" "$config_dir"
+              mkdir -p "$state_dir"/{grafana/{data,plugins,logs,provisioning/{datasources,dashboards}},prometheus,tempo}
 
-              sed -i \
-                -e "s|0.0.0.0:4317|0.0.0.0:''${PI_OTEL_COLLECTOR_GRPC_PORT:-14317}|g" \
-                -e "s|0.0.0.0:4318|0.0.0.0:''${PI_OTEL_COLLECTOR_HTTP_PORT:-14318}|g" \
-                -e "s|0.0.0.0:9464|0.0.0.0:''${PI_OTEL_COLLECTOR_PROM_PORT:-19464}|g" \
-                -e "s|tempo:4317|127.0.0.1:4317|g" \
-                "$config_dir/otel-collector-config.yaml"
+              cat > "$state_dir/prometheus/prometheus.yml" <<EOF
+              global:
+                scrape_interval: 15s
 
-              sed -i \
-                -e "s|otel-collector:9464|localhost:''${PI_OTEL_COLLECTOR_PROM_PORT:-19464}|g" \
-                "$config_dir/prometheus.yml"
+              scrape_configs:
+                - job_name: app
+                  static_configs:
+                    - targets: ['$SCRAPE_TARGET']
+              EOF
 
-              sed -i \
-                -e "s|http://prometheus:9090|http://localhost:''${PI_PROMETHEUS_PORT:-19090}|g" \
-                -e "s|http://tempo:3200|http://localhost:''${PI_TEMPO_PORT:-13200}|g" \
-                "$config_dir/grafana/provisioning/datasources/datasources.yml"
+              cat > "$state_dir/tempo/tempo.yaml" <<EOF
+              server:
+                http_listen_port: $TEMPO_PORT
+              distributor:
+                receivers:
+                  otlp:
+                    protocols:
+                      http:
+                        endpoint: 0.0.0.0:$OTLP_HTTP_PORT
+                      grpc:
+                        endpoint: 0.0.0.0:$OTLP_GRPC_PORT
+              storage:
+                trace:
+                  backend: local
+                  local:
+                    path: $state_dir/tempo/traces
+                  wal:
+                    path: $state_dir/tempo/wal
+              EOF
 
-              sed -i \
-                -e "s|http_listen_port: 3200|http_listen_port: ''${PI_TEMPO_PORT:-13200}|g" \
-                "$config_dir/tempo.yml"
+              cat > "$state_dir/grafana/provisioning/datasources/datasources.yaml" <<EOF
+              apiVersion: 1
+              datasources:
+                - name: Prometheus
+                  type: prometheus
+                  uid: prometheus
+                  url: http://localhost:$PROMETHEUS_PORT
+                  isDefault: true
+                - name: Tempo
+                  type: tempo
+                  uid: tempo
+                  url: http://localhost:$TEMPO_PORT
+                  jsonData:
+                    serviceMap:
+                      datasourceUid: prometheus
+              EOF
 
-              sed -i \
-                -e "s|/var/lib/grafana/dashboards|$config_dir/grafana/dashboards|g" \
-                "$config_dir/grafana/provisioning/dashboards/dashboards.yml"
+              cat > "$state_dir/grafana/provisioning/dashboards/dashboards.yaml" <<EOF
+              apiVersion: 1
+              providers:
+                - name: pi-observability
+                  orgId: 1
+                  folder: Pi
+                  type: file
+                  disableDeletion: false
+                  updateIntervalSeconds: 10
+                  allowUiUpdates: true
+                  options:
+                    path: $PWD/observability/grafana/dashboards
+              EOF
 
-              mkdir -p \
-                "$state_dir/prometheus" \
-                "$state_dir/grafana/data" \
-                "$state_dir/grafana/logs" \
-                "$state_dir/grafana/plugins"
-
-              export GF_SECURITY_ADMIN_USER="''${PI_GRAFANA_USER:-admin}"
-              export GF_SECURITY_ADMIN_PASSWORD="''${PI_GRAFANA_PASSWORD:-admin}"
-              export GF_AUTH_ANONYMOUS_ENABLED="true"
-              export GF_AUTH_ANONYMOUS_ORG_ROLE="Viewer"
-              export GF_PATHS_DATA="$state_dir/grafana/data"
-              export GF_PATHS_LOGS="$state_dir/grafana/logs"
-              export GF_PATHS_PLUGINS="$state_dir/grafana/plugins"
-              export GF_PATHS_PROVISIONING="$config_dir/grafana/provisioning"
-              export GF_SERVER_HTTP_ADDR="0.0.0.0"
-              export GF_SERVER_HTTP_PORT="''${PI_GRAFANA_PORT:-13000}"
-
-              "${pkgs.tempo}/bin/tempo" -config.file="$config_dir/tempo.yml" &
-
+              echo "Starting Prometheus on :$PROMETHEUS_PORT..."
               "${pkgs.prometheus}/bin/prometheus" \
-                --config.file="$config_dir/prometheus.yml" \
-                --storage.tsdb.path="$state_dir/prometheus" \
-                --web.enable-lifecycle \
-                --web.listen-address="0.0.0.0:''${PI_PROMETHEUS_PORT:-19090}" &
+                --config.file="$state_dir/prometheus/prometheus.yml" \
+                --storage.tsdb.path="$state_dir/prometheus/data" \
+                --web.listen-address=":$PROMETHEUS_PORT" \
+                > "$state_dir/prometheus.log" 2>&1 &
 
-              "${pkgs.opentelemetry-collector-contrib}/bin/otelcol-contrib" \
-                --config="$config_dir/otel-collector-config.yaml" &
+              echo "Starting Tempo on :$TEMPO_PORT (OTLP HTTP :$OTLP_HTTP_PORT, OTLP gRPC :$OTLP_GRPC_PORT)..."
+              "${pkgs.tempo}/bin/tempo" \
+                -config.file="$state_dir/tempo/tempo.yaml" \
+                > "$state_dir/tempo.log" 2>&1 &
 
-              "${pkgs.grafana}/bin/grafana" server \
-                --homepath "${pkgs.grafana}/share/grafana" \
-                --config "${pkgs.grafana}/share/grafana/conf/defaults.ini" &
+              echo "Starting Grafana on :$GRAFANA_PORT (admin/admin)..."
+              GF_PATHS_DATA="$state_dir/grafana/data" \
+              GF_PATHS_PLUGINS="$state_dir/grafana/plugins" \
+              GF_PATHS_LOGS="$state_dir/grafana/logs" \
+              GF_PATHS_PROVISIONING="$state_dir/grafana/provisioning" \
+              GF_SERVER_HTTP_PORT="$GRAFANA_PORT" \
+              GF_SECURITY_ADMIN_USER="''${PI_GRAFANA_USER:-admin}" \
+              GF_SECURITY_ADMIN_PASSWORD="''${PI_GRAFANA_PASSWORD:-admin}" \
+              GF_AUTH_ANONYMOUS_ENABLED=true \
+              GF_AUTH_ANONYMOUS_ORG_ROLE=Admin \
+                "${pkgs.grafana}/bin/grafana" server \
+                --homepath=${pkgs.grafana}/share/grafana \
+                > "$state_dir/grafana.log" 2>&1 &
 
+              echo ""
+              echo "Monitoring stack running:"
+              echo "  Grafana:    http://localhost:$GRAFANA_PORT"
+              echo "  Prometheus: http://localhost:$PROMETHEUS_PORT"
+              echo "  Tempo:      http://localhost:$TEMPO_PORT"
+              echo ""
+              echo "For pi traces, use:"
+              echo "  export PI_OTEL_TRACES_ENDPOINT=http://localhost:$OTLP_HTTP_PORT/v1/traces"
+              echo ""
+              echo "Press Ctrl+C to stop."
               wait
             '';
           };

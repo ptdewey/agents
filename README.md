@@ -40,21 +40,24 @@ Config knobs:
 
 Interactive command: `/otel-metrics status | flush | reset | config`.
 
+Telemetry emitted includes:
+- `pi.prompt.chars` and `pi.response.chars` histograms (unit `{character}`)
+- turn span attributes `prompt_chars` and `response_chars`
+- resource attribute `pi.project` (derived from `cwd` basename)
+- `extension` attribute where event context includes an originating extension
+
 ### Local observability stack (Nix run target)
 
-A local OTel + Prometheus + Grafana + Tempo stack is included.
-It runs natively via Nix, using the existing config files in `./observability`.
-The Pi OTel extension emits both metrics and traces; spans go through the collector to Tempo.
+A local Prometheus + Grafana + Tempo stack is included and runs natively via Nix.
 
 ```bash
-# Starts: otel-collector, prometheus, grafana, tempo
+# Starts: prometheus, tempo, grafana
 nix run .#observability
 ```
 
-Then point Pi at the collector:
+Point Pi traces at Tempo's OTLP/HTTP receiver (matches the extension's default port):
 
 ```bash
-export PI_OTEL_METRICS_ENDPOINT=http://localhost:14318/v1/metrics
 export PI_OTEL_TRACES_ENDPOINT=http://localhost:14318/v1/traces
 pi -e ./extensions/otel-metrics.ts
 ```
@@ -64,30 +67,19 @@ Open:
 - Grafana: `http://localhost:13000` (default user/password `admin`/`admin`)
 - Prometheus: `http://localhost:19090`
 - Tempo: `http://localhost:13200`
-- Collector Prometheus scrape endpoint: `http://localhost:19464/metrics`
 
 The `Pi / Pi Usage` and `Pi / Pi Traces` dashboards are provisioned automatically in Grafana.
 
 Port/user overrides are available via env vars before `nix run`:
 
 ```bash
-PI_OTEL_COLLECTOR_HTTP_PORT=24318 \
-PI_OTEL_COLLECTOR_GRPC_PORT=24317 \
-PI_OTEL_COLLECTOR_PROM_PORT=29464 \
+PI_OTEL_OTLP_HTTP_PORT=24318 \
+PI_OTEL_OTLP_GRPC_PORT=24317 \
 PI_PROMETHEUS_PORT=29090 \
+PI_PROMETHEUS_SCRAPE_TARGET=localhost:9101 \
 PI_GRAFANA_PORT=23000 \
 PI_GRAFANA_USER=admin \
 PI_GRAFANA_PASSWORD=admin \
 PI_TEMPO_PORT=23200 \
   nix run .#observability
-
-export PI_OTEL_METRICS_ENDPOINT=http://localhost:24318/v1/metrics
 ```
-
-For collector-only smoke tests:
-
-```bash
-docker compose -f ./observability/otel-collector-compose.yml up
-```
-
-(Uses `./observability/otel-collector-smoke-config.yaml`.)
