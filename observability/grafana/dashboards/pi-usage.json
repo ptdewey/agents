@@ -22,359 +22,605 @@
   "links": [],
   "panels": [
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "title": "Overview",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "thresholds" },
+          "mappings": [{ "options": { "0": { "color": "red", "index": 0, "text": "Down" } }, { "options": { "1": { "color": "green", "index": 1, "text": "Up" } } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
       "id": 1,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
       },
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum by (type) (rate({__name__=~\"pi_tokens(_total)?\"}[5m]))",
-          "legendFormat": "{{type}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Token rate by type (5m)",
-      "type": "timeseries"
+      "targets": [{ "editorMode": "code", "expr": "max({__name__=\"pi_up\"})", "refId": "A" }],
+      "title": "Pi Process",
+      "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 0
-      },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
       "id": 2,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
       },
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum by (type) (rate({__name__=~\"pi_cost_usd(_total)?\"}[5m]))",
-          "legendFormat": "{{type}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Cost rate by type (USD/s, 5m)",
-      "type": "timeseries"
+      "targets": [{ "editorMode": "code", "expr": "sum(rate({__name__=~\"pi_turns(_total)?\"}[5m])) * 60", "refId": "A" }],
+      "title": "Turns / min",
+      "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 0,
-        "y": 8
-      },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
       "id": 3,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "max({__name__=~\"pi_up\"})",
-          "refId": "A"
-        }
-      ],
-      "title": "Pi process up",
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=\"pi_session_starts_total\"}[24h]))", "refId": "A" }],
+      "title": "Sessions (24h)",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 6,
-        "y": 8
-      },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
       "id": 4,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"pi_turns(_total)?\"}[5m])) * 60",
-          "refId": "A"
-        }
-      ],
-      "title": "Turns / min",
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=\"pi_agent_starts_total\"}[24h]))", "refId": "A" }],
+      "title": "Agent runs (24h)",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
       "id": 5,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
       },
+      "targets": [{ "editorMode": "code", "expr": "count(count by (model) ({__name__=~\"pi_tokens.*total\"}))", "refId": "A" }],
+      "title": "Models used",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [{ "editorMode": "code", "expr": "count(count by (provider) ({__name__=~\"pi_tokens.*total\"}))", "refId": "A" }],
+      "title": "Providers used",
+      "type": "stat"
+    },
+
+    {
+      "title": "Token Usage",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 7,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
       "targets": [
-        {
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate({__name__=~\"pi_turn_duration.*bucket\"}[5m])))",
-          "legendFormat": "p95",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le) (rate({__name__=~\"pi_turn_duration.*bucket\"}[5m])))",
-          "legendFormat": "p50",
-          "range": true,
-          "refId": "B"
-        }
+        { "editorMode": "code", "expr": "sum by (type) (rate({__name__=~\"pi_tokens(_total)?\"}[5m]))", "legendFormat": "{{type}}", "range": true, "refId": "A" }
       ],
-      "title": "Turn duration",
+      "title": "Token rate by type (5m)",
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 13
-      },
-      "id": 6,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 8,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
       "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum by (tool, status) (rate({__name__=~\"pi_tool_executions(_total)?\"}[5m]))",
-          "legendFormat": "{{tool}} {{status}}",
-          "range": true,
-          "refId": "A"
-        }
+        { "editorMode": "code", "expr": "sum by (model) (rate({__name__=~\"pi_tokens_total\"}[5m]))", "legendFormat": "{{model}}", "range": true, "refId": "A" }
+      ],
+      "title": "Token rate by model (5m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "id": 9,
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (model, type) (increase({__name__=~\"pi_tokens_total\"}[24h]))", "legendFormat": "{{model}} {{type}}", "range": true, "refId": "A" }
+      ],
+      "title": "Token usage by model & type (24h)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "id": 10,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (provider) (rate({__name__=~\"pi_tokens_total\"}[5m]))", "legendFormat": "{{provider}}", "range": true, "refId": "A" }
+      ],
+      "title": "Token rate by provider (5m)",
+      "type": "timeseries"
+    },
+
+    {
+      "title": "Cost",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "currencyUSD" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "id": 11,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (type) (rate({__name__=~\"pi_cost_usd(_total)?\"}[5m]))", "legendFormat": "{{type}}", "range": true, "refId": "A" }
+      ],
+      "title": "Cost rate by type (USD/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "currencyUSD" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "id": 12,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (model) (rate({__name__=~\"pi_cost_usd_total\"}[5m]))", "legendFormat": "{{model}}", "range": true, "refId": "A" }
+      ],
+      "title": "Cost rate by model (USD/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "currencyUSD" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 31 },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=~\"pi_cost_usd_total\"}[24h]))", "refId": "A" }],
+      "title": "Total cost (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "currencyUSD" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 31 },
+      "id": 14,
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (model) (increase({__name__=~\"pi_cost_usd_total\"}[24h]))", "legendFormat": "{{model}}", "range": true, "refId": "A" }
+      ],
+      "title": "Cost by model (24h)",
+      "type": "timeseries"
+    },
+
+    {
+      "title": "Agent & Turn Performance",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "id": 15,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le, model) (rate({__name__=~\"pi_turn_duration.*bucket\"}[5m])))", "legendFormat": "{{model}} p95", "range": true, "refId": "A" },
+        { "editorMode": "code", "expr": "histogram_quantile(0.50, sum by (le, model) (rate({__name__=~\"pi_turn_duration.*bucket\"}[5m])))", "legendFormat": "{{model}} p50", "range": true, "refId": "B" }
+      ],
+      "title": "Turn duration by model",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "id": 16,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le, model) (rate({__name__=~\"pi_agent_duration.*bucket\"}[5m])))", "legendFormat": "{{model}} p95", "range": true, "refId": "A" },
+        { "editorMode": "code", "expr": "histogram_quantile(0.50, sum by (le, model) (rate({__name__=~\"pi_agent_duration.*bucket\"}[5m])))", "legendFormat": "{{model}} p50", "range": true, "refId": "B" }
+      ],
+      "title": "Agent duration by model",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "id": 17,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (model) (rate({__name__=~\"pi_turn_starts_total\"}[5m]))", "legendFormat": "{{model}}", "range": true, "refId": "A" }
+      ],
+      "title": "Turn starts by model",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "id": 18,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (status) (rate({__name__=\"pi_agent_runs_total\"}[5m]))", "legendFormat": "{{status}}", "range": true, "refId": "A" }
+      ],
+      "title": "Agent runs by status",
+      "type": "timeseries"
+    },
+
+    {
+      "title": "Tools",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 52 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 53 },
+      "id": 19,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (tool) (rate({__name__=~\"pi_tool_executions(_total)?\"}[5m]))", "legendFormat": "{{tool}}", "range": true, "refId": "A" }
+      ],
+      "title": "Tool executions by tool",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 53 },
+      "id": 20,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (tool, status) (rate({__name__=~\"pi_tool_executions(_total)?\"}[5m]))", "legendFormat": "{{tool}} {{status}}", "range": true, "refId": "A" }
       ],
       "title": "Tool executions by status",
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 13
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 61 },
+      "id": 21,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
       "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum by (status_code) (rate({__name__=~\"pi_provider_responses(_total)?\"}[5m]))",
-          "legendFormat": "{{status_code}}",
-          "range": true,
-          "refId": "A"
-        }
+        { "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le, tool) (rate({__name__=~\"pi_tool_duration.*bucket\"}[5m])))", "legendFormat": "{{tool}} p95", "range": true, "refId": "A" }
+      ],
+      "title": "Tool duration p95 by tool",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 61 },
+      "id": 22,
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (tool) (increase({__name__=~\"pi_tool_executions_total\"}[24h]))", "legendFormat": "{{tool}}", "range": true, "refId": "A" }
+      ],
+      "title": "Tool executions (24h)",
+      "type": "timeseries"
+    },
+
+    {
+      "title": "Provider",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 69 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 70 },
+      "id": 23,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (status_code) (rate({__name__=~\"pi_provider_responses(_total)?\"}[5m]))", "legendFormat": "{{status_code}}", "range": true, "refId": "A" }
       ],
       "title": "Provider responses by status",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 70 },
+      "id": 24,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (model) (rate({__name__=~\"pi_provider_requests(_total)?\"}[5m]))", "legendFormat": "{{model}}", "range": true, "refId": "A" }
+      ],
+      "title": "Provider requests by model",
+      "type": "timeseries"
+    },
+
+    {
+      "title": "Code Output (NEW)",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 78 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 79 },
+      "id": 25,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (action) (rate({__name__=~\"pi_code_lines(_total)?\"}[5m]))", "legendFormat": "{{action}}", "range": true, "refId": "A" }
+      ],
+      "title": "Code lines rate by action (created/added/removed)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 79 },
+      "id": 26,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (model) (rate({__name__=~\"pi_code_lines(_total)?\"}[5m]))", "legendFormat": "{{model}}", "range": true, "refId": "A" }
+      ],
+      "title": "Code lines rate by model",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 87 },
+      "id": 27,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=\"pi_code_lines_total\"}[24h]))", "refId": "A" }],
+      "title": "Total lines (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 87 },
+      "id": 28,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=\"pi_code_files_total\"}[24h]))", "refId": "A" }],
+      "title": "Files created (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 87 },
+      "id": 29,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=\"pi_code_edits_total\"}[24h]))", "refId": "A" }],
+      "title": "Edits (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 91 },
+      "id": 30,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (model, action) (increase({__name__=~\"pi_code_lines_total\"}[24h]))", "legendFormat": "{{model}} {{action}}", "range": true, "refId": "A" }
+      ],
+      "title": "Code lines by model & action (24h)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 91 },
+      "id": 31,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (tool) (rate({__name__=~\"pi_code_lines(_total)?\"}[5m]))", "legendFormat": "{{tool}}", "range": true, "refId": "A" }
+      ],
+      "title": "Code lines rate by tool (write/edit)",
+      "type": "timeseries"
+    },
+
+    {
+      "title": "Messages & Chars",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 99 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 100 },
+      "id": 32,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (role) (rate({__name__=~\"pi_messages(_total)?\"}[5m]))", "legendFormat": "{{role}}", "range": true, "refId": "A" }
+      ],
+      "title": "Messages by role",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 100 },
+      "id": 33,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le, role) (rate({__name__=~\"pi_response_chars.*bucket\"}[5m])))", "legendFormat": "response {{role}} p95", "range": true, "refId": "A" },
+        { "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le, role) (rate({__name__=~\"pi_prompt_chars.*bucket\"}[5m])))", "legendFormat": "prompt {{role}} p95", "range": true, "refId": "B" }
+      ],
+      "title": "Response chars p95 by role",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 108 },
+      "id": 34,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=\"pi_message_starts_total\"}[24h]))", "refId": "A" }],
+      "title": "Message starts (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 108 },
+      "id": 35,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=\"pi_message_updates_total\"}[24h]))", "refId": "A" }],
+      "title": "Message updates (24h)",
+      "type": "stat"
+    },
+
+    {
+      "title": "Compaction",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 112 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 113 },
+      "id": 36,
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [
+        { "editorMode": "code", "expr": "sum by (extension) (rate({__name__=~\"pi_compactions(_total)?\"}[5m]))", "legendFormat": "{{extension}}", "range": true, "refId": "A" }
+      ],
+      "title": "Compactions by extension",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 121 },
+      "id": 37,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=\"pi_compaction_starts_total\"}[24h]))", "refId": "A" }],
+      "title": "Compaction starts (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 121 },
+      "id": 38,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [{ "editorMode": "code", "expr": "sum(increase({__name__=\"pi_compactions_total\"}[24h]))", "refId": "A" }],
+      "title": "Compactions (24h)",
+      "type": "stat"
     }
   ],
   "schemaVersion": 39,
   "style": "dark",
-  "tags": [
-    "pi",
-    "otel"
-  ],
-  "templating": {
-    "list": []
-  },
-  "time": {
-    "from": "now-6h",
-    "to": "now"
-  },
+  "tags": ["pi", "otel", "metrics"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "",
-  "title": "Pi Usage",
-  "uid": "pi-usage",
-  "version": 1,
+  "title": "Pi Comprehensive Metrics",
+  "uid": "pi-comprehensive",
+  "version": 2,
   "weekStart": ""
 }

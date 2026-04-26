@@ -3,6 +3,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
+import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { mkdir, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
@@ -137,6 +138,11 @@ function messageChars(message: { content?: unknown; text?: unknown }): number {
   if (message.content !== undefined) return contentChars(message.content);
   if (message.text !== undefined) return contentChars(message.text);
   return 0;
+}
+
+function countLines(text: unknown): number {
+  if (typeof text !== "string") return 0;
+  return text.split("\n").length;
 }
 
 function extensionAttribute(value: unknown): string | undefined {
@@ -969,7 +975,7 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
     });
   });
 
-  pi.on("tool_execution_end", async (event) => {
+  pi.on("tool_execution_end", async (event, ctx) => {
     const status = event.isError ? "error" : "ok";
     metrics.addCounter("pi.tool.executions", 1, {
       tool: event.toolName,
@@ -988,6 +994,53 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
       );
       toolStarts.delete(event.toolCallId);
     }
+
+    // Track lines of code for write/edit operations
+    const modelAttrs = modelAttributes(ctx);
+    if (isToolCallEventType("write", event) && event.input) {
+      const content = event.input.content as string | undefined;
+      if (content) {
+        const lineCount = countLines(content);
+        metrics.addCounter("pi.code.lines", lineCount, {
+          ...modelAttrs,
+          action: "created",
+          tool: "write",
+        });
+        metrics.addCounter("pi.code.files", 1, {
+          ...modelAttrs,
+          action: "created",
+          tool: "write",
+        });
+      }
+    }
+    if (isToolCallEventType("edit", event) && event.input) {
+      const oldText = event.input.oldText as string | undefined;
+      const newText = event.input.newText as string | undefined;
+      const oldLines = oldText ? countLines(oldText) : 0;
+      const newLines = newText ? countLines(newText) : 0;
+      if (oldLines > 0) {
+        metrics.addCounter("pi.code.lines", oldLines, {
+          ...modelAttrs,
+          action: "removed",
+          tool: "edit",
+        });
+      }
+      if (newLines > 0) {
+        metrics.addCounter("pi.code.lines", newLines, {
+          ...modelAttrs,
+          action: "added",
+          tool: "edit",
+        });
+      }
+      // Track if oldText exists (indicates a modification, not just new content)
+      if (oldText && newText) {
+        metrics.addCounter("pi.code.edits", 1, {
+          ...modelAttrs,
+          tool: "edit",
+        });
+      }
+    }
+
     endTraceSpan(
       `tool:${event.toolCallId}`,
       {

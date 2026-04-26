@@ -3,7 +3,7 @@ apiVersion: 1
 providers:
   - name: pi-observability
     orgId: 1
-    folder: Pi
+    folder: ""
     type: file
     disableDeletion: false
     updateIntervalSeconds: 10
