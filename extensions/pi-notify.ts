@@ -1,25 +1,8 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-const notifier = require("node-notifier") as {
-  notify: (
-    options: {
-      title: string;
-      message: string;
-      sound?: boolean | string;
-      timeout?: number | false;
-      wait?: boolean;
-      appID?: string;
-    },
-    callback?: (error: unknown, response: unknown, metadata: unknown) => void,
-  ) => void;
-};
 
 type NotificationKind = "task-completed" | "waiting-for-input";
 
 type NotifyConfig = {
-  appId: string;
   sound: boolean | string;
   timeout: number | false;
   debug: boolean;
@@ -66,7 +49,6 @@ function envSound(name: string, fallback: boolean | string): boolean | string {
 
 function loadConfig(): NotifyConfig {
   return {
-    appId: env("PI_NOTIFY_APP_ID") ?? "Pi",
     sound: envSound("PI_NOTIFY_SOUND", true),
     timeout: envNumber("PI_NOTIFY_TIMEOUT", 10),
     debug: envBool("PI_NOTIFY_DEBUG", false),
@@ -150,22 +132,42 @@ async function isTmuxPaneVisible(pi: ExtensionAPI, config: NotifyConfig): Promis
   return paneActive === "1" && windowActive === "1" && sessionAttached !== "0";
 }
 
-function notify(config: NotifyConfig, kind: NotificationKind): void {
-  const payload =
-    kind === "waiting-for-input"
-      ? config.waiting
-      : config.completed;
+function sendNotificationLinux(title: string, message: string, sound: boolean | string): void {
+  const args = [title, message];
+  if (!sound) {
+    args.push("--hint=int:value:1"); // Suppress sound without breaking timeout
+  }
+  // Use spawn for fire-and-forget
+  const { spawn } = require("node:child_process") as typeof import("node:child_process");
+  spawn("notify-send", args, { detached: true, stdio: "ignore" }).unref();
+}
 
+function sendNotificationMac(title: string, message: string, sound: boolean | string): void {
+  const script = `
+    display notification "${message.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"
+    ${sound ? 'sound name "default"' : ""}
+  `;
+  // sound: play sound "default beep" if sound enabled
+  const finalScript = sound
+    ? `display notification "${message.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}" sound name "default"`
+    : `display notification "${message.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"`;
+
+  const { spawn } = require("node:child_process") as typeof import("node:child_process");
+  spawn("osascript", ["-e", finalScript], { detached: true, stdio: "ignore" }).unref();
+}
+
+function sendNotification(config: NotifyConfig, kind: NotificationKind): void {
+  const payload = kind === "waiting-for-input" ? config.waiting : config.completed;
   if (!payload.enabled) return;
 
-  notifier.notify({
-    title: payload.title,
-    message: payload.message,
-    sound: config.sound,
-    timeout: config.timeout,
-    wait: false,
-    appID: config.appId,
-  });
+  const platform = process.platform;
+  if (platform === "linux") {
+    sendNotificationLinux(payload.title, payload.message, config.sound);
+  } else if (platform === "darwin") {
+    sendNotificationMac(payload.title, payload.message, config.sound);
+  } else if (config.debug) {
+    console.log(`[pi-notify] unsupported platform: ${platform}`);
+  }
 }
 
 export default function piNotifyExtension(pi: ExtensionAPI) {
@@ -231,7 +233,7 @@ export default function piNotifyExtension(pi: ExtensionAPI) {
       if (config.debug) {
         console.log("[pi-notify] sending notification");
       }
-      notify(config, kind);
+      sendNotification(config, kind);
       pendingTimer = undefined;
     };
 
