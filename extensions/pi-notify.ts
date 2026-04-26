@@ -93,6 +93,62 @@ function getLastAssistantText(messages: any[]): string {
   return "";
 }
 
+function extractSummaryFromMessages(messages: any[]): string {
+  const parts: string[] = [];
+  let lastToolCall: string | undefined;
+  let lastToolResult: string | undefined;
+
+  for (const message of messages) {
+    if (message?.role === "assistant") {
+      const content = message?.content;
+      if (Array.isArray(content)) {
+        for (const part of content) {
+          if (part?.type === "tool_use" || part?.type === "function_call") {
+            const name = part.name || part.function?.name || "tool";
+            lastToolCall = name.replace(/([A-Z])/g, " $1").trim().toLowerCase();
+          }
+        }
+      }
+    } else if (message?.role === "tool") {
+      const content = message?.content;
+      if (typeof content === "string") {
+        // Truncate long tool results
+        lastToolResult = content.length > 200 
+          ? content.substring(0, 200).trim() + "..."
+          : content.trim();
+      }
+    }
+  }
+
+  if (lastToolCall) {
+    parts.push(`called: ${lastToolCall}`);
+  }
+  if (lastToolResult) {
+    parts.push(`result: ${lastToolResult}`);
+  }
+
+  // Add last assistant response summary
+  const lastText = getLastAssistantText(messages);
+  if (lastText && lastText.length > 500) {
+    parts.push(`response: ${lastText.substring(0, 500).trim()}...`);
+  } else if (lastText) {
+    parts.push(`response: ${lastText}`);
+  }
+
+  return parts.join(" | ");
+}
+
+
+function resolveMessageTemplate(template: string, messages: any[]): string {
+  const lastText = getLastAssistantText(messages);
+  const summary = extractSummaryFromMessages(messages);
+
+  return template
+    .replace(/\{last_response\}/g, lastText || "")
+    .replace(/\{summary\}/g, summary || "completed")
+    .replace(/\{truncated_last_response\}/g, lastText.length > 300 ? lastText.substring(0, 300) + "..." : lastText);
+}
+
 function classifyNotification(messages: any[]): NotificationKind {
   const text = getLastAssistantText(messages);
   if (!text) return "task-completed";
@@ -133,38 +189,37 @@ async function isTmuxPaneVisible(pi: ExtensionAPI, config: NotifyConfig): Promis
 }
 
 function sendNotificationLinux(title: string, message: string, sound: boolean | string): void {
-  const args = [title, message];
+  // Truncate message for notify-send (typically ~200 char limit for some implementations)
+  const truncated = message.length > 500 ? message.substring(0, 500) + "..." : message;
+  const args = [title, truncated];
   if (!sound) {
     args.push("--hint=int:value:1"); // Suppress sound without breaking timeout
   }
-  // Use spawn for fire-and-forget
   const { spawn } = require("node:child_process") as typeof import("node:child_process");
   spawn("notify-send", args, { detached: true, stdio: "ignore" }).unref();
 }
 
 function sendNotificationMac(title: string, message: string, sound: boolean | string): void {
-  const script = `
-    display notification "${message.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"
-    ${sound ? 'sound name "default"' : ""}
-  `;
-  // sound: play sound "default beep" if sound enabled
+  // Truncate for macOS notification center
+  const truncated = message.length > 500 ? message.substring(0, 500) + "..." : message;
   const finalScript = sound
-    ? `display notification "${message.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}" sound name "default"`
-    : `display notification "${message.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"`;
-
+    ? `display notification "${truncated.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}" sound name "default"`
+    : `display notification "${truncated.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"`;
   const { spawn } = require("node:child_process") as typeof import("node:child_process");
   spawn("osascript", ["-e", finalScript], { detached: true, stdio: "ignore" }).unref();
 }
 
-function sendNotification(config: NotifyConfig, kind: NotificationKind): void {
+function sendNotification(config: NotifyConfig, kind: NotificationKind, messages: any[]): void {
   const payload = kind === "waiting-for-input" ? config.waiting : config.completed;
   if (!payload.enabled) return;
 
+  const message = resolveMessageTemplate(payload.message, messages);
+
   const platform = process.platform;
   if (platform === "linux") {
-    sendNotificationLinux(payload.title, payload.message, config.sound);
+    sendNotificationLinux(payload.title, message, config.sound);
   } else if (platform === "darwin") {
-    sendNotificationMac(payload.title, payload.message, config.sound);
+    sendNotificationMac(payload.title, message, config.sound);
   } else if (config.debug) {
     console.log(`[pi-notify] unsupported platform: ${platform}`);
   }
@@ -205,9 +260,12 @@ export default function piNotifyExtension(pi: ExtensionAPI) {
   pi.on("agent_end", async (event, ctx) => {
     if (!ctx.hasUI) return;
 
+
     const kind = classifyNotification(event.messages as any[]);
+    const messages = event.messages as any[];
     const notificationId = ++pendingNotificationId;
     clearPendingNotification();
+
 
     if (config.debug) {
       console.log(`[pi-notify] agent_end => ${kind}`);
@@ -233,7 +291,7 @@ export default function piNotifyExtension(pi: ExtensionAPI) {
       if (config.debug) {
         console.log("[pi-notify] sending notification");
       }
-      sendNotification(config, kind);
+      sendNotification(config, kind, messages);
       pendingTimer = undefined;
     };
 

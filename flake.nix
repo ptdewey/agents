@@ -56,6 +56,10 @@
 
               mkdir -p "$state_dir"/{grafana/{data,plugins,logs,provisioning/{datasources,dashboards}},prometheus,tempo,otel-collector}
 
+              cp observability/grafana/provisioning/datasources/datasources.yml "$state_dir/grafana/provisioning/datasources/datasources.yaml"
+              cp observability/grafana/provisioning/dashboards/dashboards.yml "$state_dir/grafana/provisioning/dashboards/dashboards.yaml"
+              cp observability/grafana/dashboards/*.json "$state_dir/grafana/provisioning/dashboards/"
+
               cat > "$state_dir/prometheus/prometheus.yml" <<EOF
               global:
                 scrape_interval: 15s
@@ -139,20 +143,6 @@
                   jsonData:
                     serviceMap:
                       datasourceUid: prometheus
-              EOF
-
-              cat > "$state_dir/grafana/provisioning/dashboards/dashboards.yaml" <<EOF
-              apiVersion: 1
-              providers:
-                - name: pi-observability
-                  orgId: 1
-                  folder: Pi
-                  type: file
-                  disableDeletion: false
-                  updateIntervalSeconds: 10
-                  allowUiUpdates: true
-                  options:
-                    path: $PWD/observability/grafana/dashboards
               EOF
 
               echo "Starting Tempo on :$TEMPO_PORT..."
