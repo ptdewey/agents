@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 
 import type { Usage } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Box, Text } from "@mariozechner/pi-tui";
 
 type UsageBucket = {
   input: number;
@@ -77,15 +78,27 @@ const addUsage = (bucket: UsageBucket, usage: Usage) => {
 
 const fmtInt = (n: number): string => Math.round(n).toLocaleString();
 const fmtMoney = (n: number): string => `$${n.toFixed(4)}`;
+const metricLabel = (label: string): string => label.padEnd(10);
 
-const formatBucketLine = (label: string, bucket: UsageBucket): string => {
+const formatBucketLines = (
+  bucket: UsageBucket,
+  indent: string,
+  style: {
+    label?: (text: string) => string;
+    value?: (text: string) => string;
+    detail?: (text: string) => string;
+  } = {},
+): string[] => {
   const avg = bucket.messages > 0 ? bucket.totalTokens / bucket.messages : 0;
+  const label = style.label ?? ((text: string) => text);
+  const value = style.value ?? ((text: string) => text);
+  const detail = style.detail ?? ((text: string) => text);
+
   return [
-    `${label}`,
-    `  tokens=${fmtInt(bucket.totalTokens)} (in=${fmtInt(bucket.input)}, out=${fmtInt(bucket.output)}, cacheR=${fmtInt(bucket.cacheRead)}, cacheW=${fmtInt(bucket.cacheWrite)})`,
-    `  cost=${fmtMoney(bucket.costTotal)} (in=${fmtMoney(bucket.costInput)}, out=${fmtMoney(bucket.costOutput)}, cacheR=${fmtMoney(bucket.costCacheRead)}, cacheW=${fmtMoney(bucket.costCacheWrite)})`,
-    `  messages=${fmtInt(bucket.messages)}, avg_tokens/msg=${fmtInt(avg)}`,
-  ].join("\n");
+    `${indent}${label(metricLabel("tokens"))}${value(fmtInt(bucket.totalTokens))} ${detail(`in ${fmtInt(bucket.input)} · out ${fmtInt(bucket.output)} · cache read ${fmtInt(bucket.cacheRead)} · cache write ${fmtInt(bucket.cacheWrite)}`)}`,
+    `${indent}${label(metricLabel("cost"))}${value(fmtMoney(bucket.costTotal))} ${detail(`in ${fmtMoney(bucket.costInput)} · out ${fmtMoney(bucket.costOutput)} · cache read ${fmtMoney(bucket.costCacheRead)} · cache write ${fmtMoney(bucket.costCacheWrite)}`)}`,
+    `${indent}${label(metricLabel("messages"))}${value(fmtInt(bucket.messages))} ${detail(`avg tokens/msg ${fmtInt(avg)}`)}`,
+  ];
 };
 
 const categoryTokenTotal = (bucket: UsageBucket): number =>
@@ -98,27 +111,71 @@ const sortedEntries = (
     .filter(([, bucket]) => categoryTokenTotal(bucket) > 0)
     .sort((a, b) => categoryTokenTotal(b[1]) - categoryTokenTotal(a[1]));
 
-const renderReport = (stats: StatsFile, path: string): string => {
-  const providerLines = sortedEntries(stats.byProvider)
-    .map(([provider, bucket]) => formatBucketLine(`- ${provider}`, bucket))
-    .join("\n\n");
+type UsageReportDetails = {
+  path: string;
+  updatedAt: string;
+  totals: UsageBucket;
+  providers: Array<[string, UsageBucket]>;
+  models: Array<[string, UsageBucket]>;
+};
 
-  const modelLines = sortedEntries(stats.byModel)
-    .map(([key, bucket]) => formatBucketLine(`- ${key}`, bucket))
-    .join("\n\n");
+const buildReportDetails = (stats: StatsFile, path: string): UsageReportDetails => ({
+  path,
+  updatedAt: stats.updatedAt,
+  totals: stats.totals,
+  providers: sortedEntries(stats.byProvider),
+  models: sortedEntries(stats.byModel),
+});
+
+const renderReport = (
+  details: UsageReportDetails,
+  style: {
+    title?: (text: string) => string;
+    section?: (text: string) => string;
+    item?: (text: string) => string;
+    bullet?: (text: string) => string;
+    meta?: (text: string) => string;
+    label?: (text: string) => string;
+    value?: (text: string) => string;
+    detail?: (text: string) => string;
+    empty?: (text: string) => string;
+  } = {},
+): string => {
+  const title = style.title ?? ((text: string) => text);
+  const section = style.section ?? ((text: string) => text);
+  const item = style.item ?? ((text: string) => text);
+  const bullet = style.bullet ?? ((text: string) => text);
+  const meta = style.meta ?? ((text: string) => text);
+  const empty = style.empty ?? ((text: string) => text);
+  const bucketStyle = {
+    label: style.label,
+    value: style.value,
+    detail: style.detail,
+  };
+
+  const entryLines = (entries: Array<[string, UsageBucket]>): string[] => {
+    if (entries.length === 0) return [`  ${empty("(no data)")}`];
+
+    return entries.flatMap(([name, bucket], index) => [
+      ...(index === 0 ? [] : [""]),
+      `  ${bullet("•")} ${item(name)}`,
+      ...formatBucketLines(bucket, "    ", bucketStyle),
+    ]);
+  };
 
   return [
-    "Token Usage Stats (persistent)",
-    `File: ${path}`,
-    `Updated: ${stats.updatedAt}`,
+    title("Token Usage Stats"),
+    meta(`  File:    ${details.path}`),
+    meta(`  Updated: ${details.updatedAt}`),
     "",
-    formatBucketLine("TOTAL", stats.totals),
+    section("Total"),
+    ...formatBucketLines(details.totals, "  ", bucketStyle),
     "",
-    "By provider:",
-    providerLines || "(no data)",
+    section("By provider"),
+    ...entryLines(details.providers),
     "",
-    "By provider/model:",
-    modelLines || "(no data)",
+    section("By provider/model"),
+    ...entryLines(details.models),
   ].join("\n");
 };
 
@@ -161,6 +218,27 @@ export default function tokenUsageExtension(pi: ExtensionAPI) {
   const statsPath = DEFAULT_STATS_PATH;
   let stats = zeroStats();
   let saveQueue: Promise<void> = Promise.resolve();
+
+  pi.registerMessageRenderer("token-usage", (message, _options, theme) => {
+    const details = message.details as UsageReportDetails | undefined;
+    const content = details
+      ? renderReport(details, {
+          title: (text) => theme.bold(theme.fg("accent", text)),
+          section: (text) => theme.bold(theme.fg("toolTitle", text)),
+          item: (text) => theme.bold(text),
+          bullet: (text) => theme.fg("accent", text),
+          meta: (text) => theme.fg("muted", text),
+          label: (text) => theme.fg("muted", text),
+          value: (text) => theme.fg("success", text),
+          detail: (text) => theme.fg("dim", text),
+          empty: (text) => theme.fg("dim", text),
+        })
+      : message.content;
+
+    const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+    box.addChild(new Text(content, 0, 0));
+    return box;
+  });
 
   const queueSave = () => {
     saveQueue = saveQueue
@@ -223,11 +301,12 @@ export default function tokenUsageExtension(pi: ExtensionAPI) {
         return;
       }
 
-      const report = renderReport(stats, statsPath);
+      const details = buildReportDetails(stats, statsPath);
       pi.sendMessage({
         customType: "token-usage",
-        content: report,
+        content: renderReport(details),
         display: true,
+        details,
       });
     },
   });
