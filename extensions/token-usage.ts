@@ -88,10 +88,15 @@ const formatBucketLine = (label: string, bucket: UsageBucket): string => {
   ].join("\n");
 };
 
+const categoryTokenTotal = (bucket: UsageBucket): number =>
+  bucket.input + bucket.output + bucket.cacheRead + bucket.cacheWrite;
+
 const sortedEntries = (
   obj: Record<string, UsageBucket>,
 ): Array<[string, UsageBucket]> =>
-  Object.entries(obj).sort((a, b) => b[1].totalTokens - a[1].totalTokens);
+  Object.entries(obj)
+    .filter(([, bucket]) => categoryTokenTotal(bucket) > 0)
+    .sort((a, b) => categoryTokenTotal(b[1]) - categoryTokenTotal(a[1]));
 
 const renderReport = (stats: StatsFile, path: string): string => {
   const providerLines = sortedEntries(stats.byProvider)
