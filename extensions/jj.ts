@@ -11,7 +11,7 @@ import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 const MAX_DESC_LENGTH = 50;
 
@@ -28,6 +28,43 @@ function sanitizeStatusText(text: string): string {
     .replace(/[\r\n\t]/g, " ")
     .replace(/ +/g, " ")
     .trim();
+}
+
+function fitFooterColumns(
+  left: string,
+  right: string,
+  width: number,
+  ellipsis = "...",
+  minGap = 2
+): string {
+  if (width <= 0) return "";
+  if (!right) return truncateToWidth(left, width, ellipsis);
+
+  const fittedRight = truncateToWidth(right, width, ellipsis);
+  const fittedRightWidth = visibleWidth(fittedRight);
+
+  // If the right side consumes the whole footer, drop the left side rather than
+  // returning an over-wide line. TUI component renderers must fit `width`.
+  if (fittedRightWidth >= width) return fittedRight;
+
+  const maxLeftWidth = width - fittedRightWidth - minGap;
+  if (maxLeftWidth <= 0) {
+    return " ".repeat(width - fittedRightWidth) + fittedRight;
+  }
+
+  const fittedLeft = truncateToWidth(left, maxLeftWidth, ellipsis);
+  const padding = " ".repeat(
+    Math.max(minGap, width - visibleWidth(fittedLeft) - fittedRightWidth)
+  );
+  return fittedLeft + padding + fittedRight;
+}
+
+function toolResultText(result: { content?: Array<{ type: string; text?: string }> }): string {
+  const text = result.content
+    ?.filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("\n");
+  return text || "";
 }
 
 function parseDiffLineStats(diff: string) {
@@ -98,22 +135,8 @@ function installJjFooter(ctx: ExtensionContext) {
         const jjStatus = extensionStatuses.get("jj");
         const left = theme.fg("dim", pwd);
         const right = jjStatus ? sanitizeStatusText(jjStatus) : "";
-        const leftWidth = visibleWidth(left);
-        const rightWidth = visibleWidth(right);
-        const minGap = right ? 2 : 0;
-
-        let pwdLine: string;
-        if (right && leftWidth + minGap + rightWidth <= width) {
-          const padding = " ".repeat(width - leftWidth - rightWidth);
-          pwdLine = left + padding + right;
-        } else if (right) {
-          const maxLeftWidth = Math.max(1, width - rightWidth - minGap);
-          const truncatedLeft = truncateToWidth(left, maxLeftWidth, theme.fg("dim", "..."));
-          const padding = " ".repeat(Math.max(0, width - visibleWidth(truncatedLeft) - rightWidth));
-          pwdLine = truncatedLeft + padding + right;
-        } else {
-          pwdLine = truncateToWidth(left, width, theme.fg("dim", "..."));
-        }
+        const ellipsis = theme.fg("dim", "...");
+        const pwdLine = fitFooterColumns(left, right, width, ellipsis);
 
         let totalInput = 0;
         let totalOutput = 0;
@@ -135,14 +158,11 @@ function installJjFooter(ctx: ExtensionContext) {
 
         const rightSide = theme.fg("dim", ctx.model?.id || "no-model");
 
-        let statsLine = statsLeft;
+        let statsLine: string;
         if (statsLeftParts.length > 0) {
-          const availableForLeft = Math.max(1, width - visibleWidth(rightSide) - 2);
-          const truncatedStatsLeft = truncateToWidth(statsLeft, availableForLeft, theme.fg("dim", "..."));
-          const padding = " ".repeat(Math.max(1, width - visibleWidth(truncatedStatsLeft) - visibleWidth(rightSide)));
-          statsLine = truncatedStatsLeft + padding + rightSide;
+          statsLine = fitFooterColumns(statsLeft, rightSide, width, ellipsis);
         } else {
-          const truncatedRight = truncateToWidth(rightSide, width, theme.fg("dim", "..."));
+          const truncatedRight = truncateToWidth(rightSide, width, ellipsis);
           statsLine = " ".repeat(Math.max(0, width - visibleWidth(truncatedRight))) + truncatedRight;
         }
 
@@ -153,9 +173,9 @@ function installJjFooter(ctx: ExtensionContext) {
 
         const lines = [pwdLine, statsLine];
         if (otherStatuses.length > 0) {
-          lines.push(truncateToWidth(otherStatuses.join(" "), width, theme.fg("dim", "...")));
+          lines.push(truncateToWidth(otherStatuses.join(" "), width, ellipsis));
         }
-        return lines;
+        return lines.map((line) => truncateToWidth(line, width, ellipsis));
       },
     };
   });
@@ -226,6 +246,12 @@ export default function (pi: ExtensionAPI) {
           "Arguments to pass to jj (e.g., ['st'], ['diff', '-r', '@-'], ['desc', '-m', 'added feature'])",
       }),
     }),
+    renderResult(result) {
+      // The fallback renderer can receive very long jj lines (for example long
+      // commit descriptions in `jj st` / `jj diff`). Text wraps them to the
+      // available component width so the TUI never gets an over-wide line.
+      return new Text(toolResultText(result), 0, 0);
+    },
     async execute(toolCallId, params) {
       const args = [...params.args];
 
