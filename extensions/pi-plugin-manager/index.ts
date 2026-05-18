@@ -240,7 +240,7 @@ function normalizeDesired(config: PluginConfig): DesiredState {
   for (const plugin of config.plugins ?? []) {
     if (!plugin || typeof plugin !== "object") {
       throw new Error(
-        "Each plugin entry must be an object returned by local(), npm(), git(), or pkg().",
+        "Each plugin entry must be an object returned by local(), npm(), or git().",
       );
     }
 
@@ -538,7 +538,7 @@ function configFromSettings(settings: PiSettings): string {
   const pluginCalls = pluginCallsFromSettings(settings);
   if (pluginCalls.length === 0) return sampleConfig();
 
-  return `import { definePlugins, local, pkg } from ${JSON.stringify(dslImportSpecifier())};
+  return `import { definePlugins, git, local, npm } from ${JSON.stringify(dslImportSpecifier())};
 
 export default definePlugins({
   // Seeded from ${settingsPath()} by /plugins init.
@@ -571,11 +571,20 @@ function pluginCallsFromSettings(settings: PiSettings): string[] {
 }
 
 function packageEntryToPluginCall(entry: SettingsPackageEntry): string {
-  if (typeof entry === "string") return `pkg(${JSON.stringify(entry)})`;
+  if (typeof entry === "string") return packageSourceToPluginCall(entry);
   if (!entry || typeof entry.source !== "string" || entry.source.trim() === "") {
     throw new Error("settings.json#packages objects must include a source string.");
   }
 
+  return packageSourceToPluginCall(
+    entry.source,
+    packageResourcesFromEntry(entry),
+  );
+}
+
+function packageResourcesFromEntry(
+  entry: Extract<SettingsPackageEntry, object>,
+): PackageResources | undefined {
   const resources: PackageResources = {};
   let hasResources = false;
   for (const key of ["extensions", "skills", "prompts", "themes"] as const) {
@@ -585,8 +594,135 @@ function packageEntryToPluginCall(entry: SettingsPackageEntry): string {
     hasResources = true;
   }
 
-  if (!hasResources) return `pkg(${JSON.stringify(entry.source)})`;
-  return `pkg(${JSON.stringify(entry.source)}, ${JSON.stringify({ resources }, null, 2)})`;
+  return hasResources ? resources : undefined;
+}
+
+function packageSourceToPluginCall(
+  source: string,
+  resources?: PackageResources,
+): string {
+  const npmSource = parseNpmPackageSource(source);
+  if (npmSource) {
+    return formatDslCall(
+      "npm",
+      npmSource.name,
+      buildOptions({ version: npmSource.version, resources }),
+    );
+  }
+
+  const gitSource = parseGitPackageSource(source);
+  if (gitSource) {
+    return formatDslCall(
+      "git",
+      gitSource.repo,
+      buildOptions({ ref: gitSource.ref, resources }),
+    );
+  }
+
+  if (isLocalPackageSource(source)) {
+    return formatDslCall(
+      "local",
+      source,
+      buildOptions({ package: true, resources }),
+    );
+  }
+
+  throw new Error(
+    `Cannot seed unsupported package source ${JSON.stringify(source)}. ` +
+      `/plugins init can seed npm:, git/protocol URLs, and local package paths.`,
+  );
+}
+
+function parseNpmPackageSource(
+  source: string,
+): { name: string; version?: string } | undefined {
+  if (!source.startsWith("npm:")) return undefined;
+  const spec = source.slice("npm:".length);
+  if (!spec.trim()) throw new Error("npm package source must include a name.");
+
+  const versionIndex = npmVersionDelimiterIndex(spec);
+  if (versionIndex === -1) return { name: spec };
+  const version = spec.slice(versionIndex + 1);
+  if (!version) {
+    throw new Error(`npm package source ${source} has an empty version.`);
+  }
+  return {
+    name: spec.slice(0, versionIndex),
+    version,
+  };
+}
+
+function npmVersionDelimiterIndex(spec: string): number {
+  if (!spec.startsWith("@")) return spec.indexOf("@");
+
+  const scopeEnd = spec.indexOf("/", 1);
+  if (scopeEnd === -1) return -1;
+  return spec.indexOf("@", scopeEnd + 1);
+}
+
+function parseGitPackageSource(
+  source: string,
+): { repo: string; ref?: string } | undefined {
+  if (!isGitPackageSource(source)) return undefined;
+  const withoutPrefix = source.startsWith("git:")
+    ? source.slice("git:".length)
+    : source;
+  const refIndex = gitRefDelimiterIndex(withoutPrefix);
+  if (refIndex === -1) return { repo: withoutPrefix };
+  const ref = withoutPrefix.slice(refIndex + 1);
+  if (!ref) throw new Error(`git package source ${source} has an empty ref.`);
+  return {
+    repo: withoutPrefix.slice(0, refIndex),
+    ref,
+  };
+}
+
+function isGitPackageSource(source: string): boolean {
+  return source.startsWith("git:") || /^[a-z]+:\/\//i.test(source);
+}
+
+function gitRefDelimiterIndex(source: string): number {
+  const index = source.lastIndexOf("@");
+  if (index <= 0) return -1;
+  const before = source.slice(0, index);
+  const after = source.slice(index + 1);
+  if (!after || after.includes(":")) return -1;
+  if (!before.includes("/") && !before.includes(":")) return -1;
+  return index;
+}
+
+function isLocalPackageSource(source: string): boolean {
+  return (
+    source === "~" ||
+    source.startsWith("~/") ||
+    source.startsWith("/") ||
+    source.startsWith("./") ||
+    source.startsWith("../")
+  );
+}
+
+function buildOptions(input: {
+  version?: string;
+  ref?: string;
+  package?: boolean;
+  resources?: PackageResources;
+}): Record<string, unknown> | undefined {
+  const options: Record<string, unknown> = {};
+  if (input.version) options.version = input.version;
+  if (input.ref) options.ref = input.ref;
+  if (input.package) options.package = true;
+  if (input.resources) options.resources = input.resources;
+  return Object.keys(options).length > 0 ? options : undefined;
+}
+
+function formatDslCall(
+  helper: "git" | "local" | "npm",
+  source: string,
+  options?: Record<string, unknown>,
+): string {
+  const args = [JSON.stringify(source)];
+  if (options) args.push(JSON.stringify(options, null, 2));
+  return `${helper}(${args.join(", ")})`;
 }
 
 function formatPluginCall(call: string): string {
@@ -597,7 +733,7 @@ function formatPluginCall(call: string): string {
 }
 
 function sampleConfig(): string {
-  return `import { definePlugins, git, local, npm, pkg } from ${JSON.stringify(dslImportSpecifier())};
+  return `import { definePlugins, git, local, npm } from ${JSON.stringify(dslImportSpecifier())};
 
 export default definePlugins({
   plugins: [
@@ -610,7 +746,6 @@ export default definePlugins({
     // npm and git packages use Pi's package source syntax.
     // npm("@org/pi-tools", { version: "^1.0.0" }),
     // git("github.com/user/pi-tools", { ref: "main" }),
-    // pkg("npm:package-source-as-written-in-settings"),
 
     // Resource filters mirror Pi package filters.
     // npm("@org/mixed-pi-package", {

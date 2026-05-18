@@ -35,8 +35,6 @@ export interface GitPluginOptions extends BasePluginOptions {
   ref?: string;
 }
 
-export interface PackagePluginOptions extends BasePluginOptions {}
-
 export interface LocalExtensionPlugin extends LocalPluginOptions {
   kind: "local-extension";
   path: string;
@@ -48,7 +46,7 @@ export interface LocalPackagePlugin extends LocalPluginOptions {
   package: true;
 }
 
-export interface PackagePlugin extends PackagePluginOptions {
+export interface PackagePlugin extends BasePluginOptions {
   kind: "package";
   source: string;
 }
@@ -82,8 +80,3 @@ export declare function git(
   options?: GitPluginOptions,
 ): PackagePlugin;
 
-/** Manage an explicit Pi package source string or filtered package object. */
-export declare function pkg(
-  source: string,
-  options?: PackagePluginOptions,
-): PackagePlugin;

@@ -1,0 +1,7 @@
+{
+  "name": "pi-notify-package",
+  "private": true,
+  "dependencies": {
+    "node-notifier": "^10.0.1"
+  }
+}

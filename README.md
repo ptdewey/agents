@@ -2,6 +2,35 @@
 
 A collection of agent skills, subagents, and general coding agent settings that I've made or found useful.
 
+## Pi notify package (macOS)
+
+`packages/pi-notify/` is a local Pi package (not auto-loaded from this repo's top-level `extensions/` folder).
+
+It ships `extensions/pi-notify.ts`, prefers a JavaScript backend (`node-notifier`) on macOS, and falls back to `osascript`.
+
+Add it to `~/.pi/agent/plugins.ts`:
+
+```ts
+import { definePlugins, local, npm } from "./extensions/pi-plugin-manager/dsl.js";
+
+export default definePlugins({
+  plugins: [
+    npm("pi-subagents"),
+    npm("pi-hermes-memory"),
+    npm("pi-rtk-optimizer"),
+
+    local("~/projects/skills/packages/pi-notify", {
+      package: true,
+      resources: {
+        extensions: ["extensions/pi-notify.ts"],
+      },
+    }),
+  ],
+});
+```
+
+Then run `/plugins sync` and `/plugins reload`.
+
 ## Pi plugin manager extension
 
 `extensions/pi-plugin-manager/` is a global-first declarative plugin manager for Pi packages and local extensions. It reads `~/.pi/agent/plugins.ts` (or `.mts`, `.mjs`, `.js`, `.cjs`), reconciles `~/.pi/agent/settings.json`, and tracks managed entries in `~/.pi/agent/plugins-lock.json`.

@@ -29,14 +29,6 @@ export function git(repo, options = {}) {
   };
 }
 
-export function pkg(source, options = {}) {
-  return {
-    kind: "package",
-    source,
-    ...options,
-  };
-}
-
 function buildNpmSource(name, version) {
   const base = name.startsWith("npm:") ? name : `npm:${name}`;
   if (!version) return base;

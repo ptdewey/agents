@@ -35,3 +35,5 @@ When working in Go codebases, always do the following:
 
 - Use `go run .` or `go run ./cmd/foo` instead of `go build` to
   run programs, to avoid leaving behind build artifacts.
+
+@RTK.md

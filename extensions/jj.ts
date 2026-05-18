@@ -8,12 +8,22 @@
  */
 
 import type { AssistantMessage } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 const MAX_DESC_LENGTH = 50;
+const STATUS_REFRESH_DEBOUNCE_MS = 750;
+
+type JjSnapshot = {
+  status: string;
+  footerStatus: string;
+  contextMessage: string;
+};
 
 function formatTokens(count: number): string {
   if (count < 1000) return count.toString();
@@ -35,7 +45,7 @@ function fitFooterColumns(
   right: string,
   width: number,
   ellipsis = "...",
-  minGap = 2
+  minGap = 2,
 ): string {
   if (width <= 0) return "";
   if (!right) return truncateToWidth(left, width, ellipsis);
@@ -54,12 +64,14 @@ function fitFooterColumns(
 
   const fittedLeft = truncateToWidth(left, maxLeftWidth, ellipsis);
   const padding = " ".repeat(
-    Math.max(minGap, width - visibleWidth(fittedLeft) - fittedRightWidth)
+    Math.max(minGap, width - visibleWidth(fittedLeft) - fittedRightWidth),
   );
   return fittedLeft + padding + fittedRight;
 }
 
-function toolResultText(result: { content?: Array<{ type: string; text?: string }> }): string {
+function toolResultText(result: {
+  content?: Array<{ type: string; text?: string }>;
+}): string {
   const text = result.content
     ?.filter((part) => part.type === "text" && typeof part.text === "string")
     .map((part) => part.text)
@@ -67,42 +79,76 @@ function toolResultText(result: { content?: Array<{ type: string; text?: string 
   return text || "";
 }
 
-function parseDiffLineStats(diff: string) {
+function parseWorkingCopyChangeLine(status: string): string {
+  const match = status.match(/^Working copy\s+\(@\)\s*:\s*(.+)$/m);
+  return match?.[1]?.trim() ?? "(no description set)";
+}
+
+function parseWorkingCopyCounts(status: string) {
+  let modified = 0;
   let added = 0;
   let removed = 0;
-  let modified = 0;
-  let pendingAdded = 0;
-  let pendingRemoved = 0;
-  let inHunk = false;
+  let other = 0;
+  let inChanges = false;
 
-  const flushPending = () => {
-    if (pendingAdded === 0 && pendingRemoved === 0) return;
-    const paired = Math.min(pendingAdded, pendingRemoved);
-    modified += paired;
-    added += Math.max(0, pendingAdded - paired);
-    removed += Math.max(0, pendingRemoved - paired);
-    pendingAdded = 0;
-    pendingRemoved = 0;
-  };
+  for (const rawLine of status.split("\n")) {
+    const line = rawLine.trim();
 
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("diff --git ") || line.startsWith("@@ ")) {
-      flushPending();
-      inHunk = line.startsWith("@@ ");
+    if (!inChanges) {
+      if (line === "Working copy changes:") inChanges = true;
       continue;
     }
-    if (!inHunk || line.startsWith("+++ ") || line.startsWith("--- ")) continue;
-    if (line.startsWith("+")) {
-      pendingAdded += 1;
-    } else if (line.startsWith("-")) {
-      pendingRemoved += 1;
-    } else {
-      flushPending();
+
+    if (line.startsWith("Working copy") || line.startsWith("Parent commit"))
+      break;
+    if (!line) continue;
+
+    const marker = line[0];
+    switch (marker) {
+      case "M":
+        modified += 1;
+        break;
+      case "A":
+        added += 1;
+        break;
+      case "D":
+        removed += 1;
+        break;
+      default:
+        other += 1;
+        break;
     }
   }
 
-  flushPending();
-  return { added, removed, modified };
+  return { modified, added, removed, other };
+}
+
+function buildJjSnapshot(status: string): JjSnapshot {
+  const changeLine = parseWorkingCopyChangeLine(status);
+  const changeId = changeLine.split(/\s+/)[0] || "???";
+  const counts = parseWorkingCopyCounts(status);
+  const countParts = [];
+  if (counts.added) countParts.push(`+${counts.added}`);
+  if (counts.removed) countParts.push(`-${counts.removed}`);
+  if (counts.modified) countParts.push(`~${counts.modified}`);
+  if (counts.other) countParts.push(`Δ${counts.other}`);
+
+  const descriptionMatch = changeLine.match(/^\S+\s+\S+\s+(.*)$/);
+  const description = (descriptionMatch?.[1] || changeLine).trim();
+  const truncatedDescription =
+    description.length > MAX_DESC_LENGTH
+      ? description.slice(0, MAX_DESC_LENGTH) + "..."
+      : description;
+
+  let footerStatus = changeId;
+  if (countParts.length > 0) footerStatus += ` ${countParts.join(" ")}`;
+  if (truncatedDescription) footerStatus += ` ${truncatedDescription}`;
+
+  return {
+    status,
+    footerStatus,
+    contextMessage: `**jj repo detected** - Use the \`jj\` tool for version control (not git/bash).\n\nCurrent change: ${changeLine}\n\nStatus:\n\`\`\`\n${status.trim()}\n\`\`\``,
+  };
 }
 
 function installJjFooter(ctx: ExtensionContext) {
@@ -163,7 +209,9 @@ function installJjFooter(ctx: ExtensionContext) {
           statsLine = fitFooterColumns(statsLeft, rightSide, width, ellipsis);
         } else {
           const truncatedRight = truncateToWidth(rightSide, width, ellipsis);
-          statsLine = " ".repeat(Math.max(0, width - visibleWidth(truncatedRight))) + truncatedRight;
+          statsLine =
+            " ".repeat(Math.max(0, width - visibleWidth(truncatedRight))) +
+            truncatedRight;
         }
 
         const otherStatuses = Array.from(extensionStatuses.entries())
@@ -181,61 +229,74 @@ function installJjFooter(ctx: ExtensionContext) {
   });
 }
 
-async function updateStatusWidget(pi: ExtensionAPI, ctx: ExtensionContext) {
-  // Check if we're in a jj repo
+async function fetchJjSnapshot(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+): Promise<JjSnapshot | null> {
   const { code } = await pi.exec("test", ["-d", ".jj"]);
   if (code !== 0) {
-    ctx.ui.setStatus("jj", undefined);
-    return;
+    if (ctx.hasUI) ctx.ui.setStatus("jj", undefined);
+    return null;
   }
 
-  // Get change info: id, bookmarks, description
-  const { stdout: info } = await pi.exec("jj", [
-    "log",
-    "-r",
-    "@",
-    "--no-graph",
-    "-T",
-    'change_id.short() ++ "\n" ++ bookmarks.join(", ") ++ "\n" ++ description.first_line()',
-  ]);
-  const [changeId, bookmarks, description] = info.trim().split("\n");
-
-  // Get line counts from diff
-  const { stdout: diff } = await pi.exec("jj", ["diff", "--git", "--color=never"]);
-  const { added, removed, modified } = parseDiffLineStats(diff);
-
-  // Build status line
-  let statusLine = changeId || "???";
-
-  if (added || removed || modified) {
-    statusLine += ` +${added}/-${removed}/~${modified}`;
+  const { stdout, stderr, code: statusCode } = await pi.exec("jj", ["st"]);
+  if (statusCode !== 0) {
+    if (ctx.hasUI) ctx.ui.setStatus("jj", "status unavailable");
+    return {
+      status: stderr || "jj st failed",
+      footerStatus: "status unavailable",
+      contextMessage:
+        "**jj repo detected** - Use the `jj` tool for version control (not git/bash).",
+    };
   }
 
-  if (bookmarks) {
-    statusLine += ` [${bookmarks}]`;
-  }
-
-  if (description) {
-    const truncated =
-      description.length > MAX_DESC_LENGTH
-        ? description.slice(0, MAX_DESC_LENGTH) + "..."
-        : description;
-    statusLine += ` ${truncated}`;
-  } else {
-    statusLine += " (no description)";
-  }
-
-  ctx.ui.setStatus("jj", statusLine);
+  const snapshot = buildJjSnapshot(stdout || "");
+  if (ctx.hasUI) ctx.ui.setStatus("jj", snapshot.footerStatus);
+  return snapshot;
 }
 
 export default function (pi: ExtensionAPI) {
+  let cachedSnapshot: JjSnapshot | null = null;
+  let inJjRepo: boolean | null = null;
+  let snapshotRefreshPromise: Promise<JjSnapshot | null> | null = null;
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const refreshSnapshot = async (
+    ctx: ExtensionContext,
+    force = false,
+  ): Promise<JjSnapshot | null> => {
+    if (!force && cachedSnapshot) return cachedSnapshot;
+    if (!force && inJjRepo === false) return null;
+    if (snapshotRefreshPromise) return snapshotRefreshPromise;
+
+    snapshotRefreshPromise = fetchJjSnapshot(pi, ctx)
+      .then((snapshot) => {
+        cachedSnapshot = snapshot;
+        inJjRepo = snapshot !== null;
+        return snapshot;
+      })
+      .finally(() => {
+        snapshotRefreshPromise = null;
+      });
+
+    return snapshotRefreshPromise;
+  };
+
+  const scheduleSnapshotRefresh = (ctx: ExtensionContext) => {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      void refreshSnapshot(ctx, true);
+    }, STATUS_REFRESH_DEBOUNCE_MS);
+  };
+
   // Single jj tool
   pi.registerTool({
     name: "jj",
     label: "jj",
     description:
       "Run jj (Jujutsu) version control commands. Descriptions are auto-prefixed with 'wip:'. Push commands are disabled - leave pushing to the user.",
-    promptSnippet: "Run jj commands (descriptions auto-prefixed with wip:, push disabled)",
+    promptSnippet:
+      "Run jj commands (descriptions auto-prefixed with wip:, push disabled)",
     promptGuidelines: [
       "Use the jj tool instead of bash for jj commands in repos with .jj/ directory",
       "Never push - leave `jj git push` to the user",
@@ -284,7 +345,9 @@ export default function (pi: ExtensionAPI) {
 
       if (code !== 0) {
         return {
-          content: [{ type: "text", text: stderr || `jj exited with code ${code}` }],
+          content: [
+            { type: "text", text: stderr || `jj exited with code ${code}` },
+          ],
           isError: true,
           details: { args, exitCode: code },
         };
@@ -304,7 +367,8 @@ export default function (pi: ExtensionAPI) {
     const cmd = event.input.command;
 
     // Check for git porcelain commands that shouldn't be used in jj
-    const gitCommands = /\bgit\s+(add|commit|stash|checkout|reset|rebase|branch|merge)\b/;
+    const gitCommands =
+      /\bgit\s+(add|commit|stash|checkout|reset|rebase|branch|merge)\b/;
     if (!gitCommands.test(cmd)) return;
 
     // Check if we're in a jj repo
@@ -315,41 +379,26 @@ export default function (pi: ExtensionAPI) {
     if (ctx.hasUI) {
       const ok = await ctx.ui.confirm(
         "Git command in jj repo",
-        `You're using git in a jj repo. jj has no staging area and uses different commands.\n\nCommand: ${cmd}\n\nProceed anyway?`
+        `You're using git in a jj repo. jj has no staging area and uses different commands.\n\nCommand: ${cmd}\n\nProceed anyway?`,
       );
       if (!ok) {
-        return { block: true, reason: "Use jj commands in jj repos (see jj-workflow skill)" };
+        return {
+          block: true,
+          reason: "Use jj commands in jj repos (see jj-workflow skill)",
+        };
       }
     }
   });
 
   // Inject jj context at agent start
-  pi.on("before_agent_start", async (event, ctx) => {
-    // Check if we're in a jj repo
-    const { code } = await pi.exec("test", ["-d", ".jj"]);
-    if (code !== 0) return;
-
-    const { stdout: status } = await pi.exec("jj", ["st"]);
-    const { stdout: log } = await pi.exec("jj", [
-      "log",
-      "-r",
-      "@",
-      "--no-graph",
-      "-T",
-      "change_id.short() ++ ' | ' ++ description.first_line()",
-    ]);
+  pi.on("before_agent_start", async (_event, ctx) => {
+    const snapshot = await refreshSnapshot(ctx, false);
+    if (!snapshot) return;
 
     return {
       message: {
         customType: "jj-context",
-        content: `**jj repo detected** - Use the \`jj\` tool for version control (not git/bash).
-
-Current change: ${log.trim() || "(no description)"}
-
-Status:
-\`\`\`
-${status.trim()}
-\`\`\``,
+        content: snapshot.contextMessage,
         display: false,
       },
     };
@@ -357,17 +406,21 @@ ${status.trim()}
 
   // Update status widget on session start
   pi.on("session_start", async (_event, ctx) => {
-    const { code } = await pi.exec("test", ["-d", ".jj"]);
-    if (code === 0) {
+    const snapshot = await refreshSnapshot(ctx, true);
+    if (snapshot) {
       installJjFooter(ctx);
     }
-    await updateStatusWidget(pi, ctx);
   });
 
   // Update status widget after tool calls that may change the working copy
   pi.on("tool_execution_end", async (event, ctx) => {
-    if (["jj", "bash", "edit", "write"].includes(event.toolName)) {
-      await updateStatusWidget(pi, ctx);
+    if (event.toolName === "jj") {
+      await refreshSnapshot(ctx, true);
+      return;
+    }
+
+    if (event.toolName === "edit" || event.toolName === "write") {
+      scheduleSnapshotRefresh(ctx);
     }
   });
 }

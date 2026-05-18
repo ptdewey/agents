@@ -188,25 +188,168 @@ async function isTmuxPaneVisible(pi: ExtensionAPI, config: NotifyConfig): Promis
   return paneActive === "1" && windowActive === "1" && sessionAttached !== "0";
 }
 
-function sendNotificationLinux(title: string, message: string, sound: boolean | string): void {
+function spawnNotificationCommand(
+  command: string,
+  args: string[],
+  debug: boolean,
+  onMissing?: () => void,
+): void {
+  const { spawn } = require("node:child_process") as typeof import("node:child_process");
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: debug ? ["ignore", "pipe", "pipe"] : "ignore",
+  });
+
+  let stderr = "";
+  if (debug && child.stderr) {
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+  }
+
+  child.on("error", (err: NodeJS.ErrnoException) => {
+    if (err?.code === "ENOENT") {
+      if (debug) {
+        console.log(`[pi-notify] ${command} not found`);
+      }
+      onMissing?.();
+      return;
+    }
+    if (debug) {
+      console.log(`[pi-notify] ${command} failed: ${err.message}`);
+    }
+  });
+
+  if (debug) {
+    child.on("close", (code) => {
+      if (!code || code === 0) return;
+      const details = stderr.trim();
+      console.log(
+        `[pi-notify] ${command} exited with code ${code}${details ? `: ${details}` : ""}`,
+      );
+    });
+  }
+
+  child.unref();
+}
+
+function sendNotificationLinux(
+  title: string,
+  message: string,
+  sound: boolean | string,
+  debug: boolean,
+): void {
   // Truncate message for notify-send (typically ~200 char limit for some implementations)
   const truncated = message.length > 500 ? message.substring(0, 500) + "..." : message;
   const args = [title, truncated];
   if (!sound) {
     args.push("--hint=int:value:1"); // Suppress sound without breaking timeout
   }
-  const { spawn } = require("node:child_process") as typeof import("node:child_process");
-  spawn("notify-send", args, { detached: true, stdio: "ignore" }).unref();
+  spawnNotificationCommand("notify-send", args, debug);
 }
 
-function sendNotificationMac(title: string, message: string, sound: boolean | string): void {
-  // Truncate for macOS notification center
+function sendNotificationMacViaOsa(
+  title: string,
+  truncated: string,
+  soundName: string | undefined,
+  debug: boolean,
+): void {
+  // Pass title/message as argv values so osascript handles escaping safely.
+  const script = `
+on run argv
+  set notificationTitle to item 1 of argv
+  set notificationMessage to item 2 of argv
+  if (count of argv) > 2 then
+    set notificationSound to item 3 of argv
+    display notification notificationMessage with title notificationTitle sound name notificationSound
+  else
+    display notification notificationMessage with title notificationTitle
+  end if
+end run
+`.trim();
+
+  const args = ["-e", script, title, truncated];
+  if (soundName) args.push(soundName);
+  spawnNotificationCommand("osascript", args, debug);
+}
+
+type NodeNotifierLike = {
+  notify: (
+    options: Record<string, unknown>,
+    callback?: (error: Error | null, response?: unknown, metadata?: unknown) => void,
+  ) => void;
+};
+
+let cachedNodeNotifier: NodeNotifierLike | null | undefined;
+
+function loadNodeNotifier(debug: boolean): NodeNotifierLike | undefined {
+  if (cachedNodeNotifier !== undefined) {
+    return cachedNodeNotifier ?? undefined;
+  }
+
+  try {
+    const mod = require("node-notifier") as { default?: NodeNotifierLike } | NodeNotifierLike;
+    const notifier = ((mod as { default?: NodeNotifierLike }).default ?? mod) as NodeNotifierLike;
+    if (notifier && typeof notifier.notify === "function") {
+      cachedNodeNotifier = notifier;
+      return notifier;
+    }
+  } catch (err) {
+    if (debug) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`[pi-notify] node-notifier unavailable: ${message}`);
+    }
+  }
+
+  cachedNodeNotifier = null;
+  return undefined;
+}
+
+function sendNotificationMac(
+  title: string,
+  message: string,
+  sound: boolean | string,
+  timeout: number | false,
+  debug: boolean,
+): void {
+  // Truncate for macOS notification center.
   const truncated = message.length > 500 ? message.substring(0, 500) + "..." : message;
-  const finalScript = sound
-    ? `display notification "${truncated.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}" sound name "default"`
-    : `display notification "${truncated.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"`;
-  const { spawn } = require("node:child_process") as typeof import("node:child_process");
-  spawn("osascript", ["-e", finalScript], { detached: true, stdio: "ignore" }).unref();
+  const soundName = sound === true ? "default" : typeof sound === "string" ? sound : undefined;
+
+  const notifier = loadNodeNotifier(debug);
+  if (!notifier) {
+    if (debug) {
+      console.log("[pi-notify] falling back to osascript backend");
+    }
+    sendNotificationMacViaOsa(title, truncated, soundName, debug);
+    return;
+  }
+
+  const options: Record<string, unknown> = {
+    title,
+    message: truncated,
+  };
+  if (typeof timeout === "number") {
+    options.timeout = timeout;
+  }
+
+  if (sound === false) {
+    options.sound = false;
+  } else if (sound === true) {
+    options.sound = true;
+  } else {
+    options.sound = sound;
+  }
+
+  notifier.notify(options, (error) => {
+    if (!error) return;
+    if (debug) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`[pi-notify] node-notifier failed: ${message}`);
+      console.log("[pi-notify] falling back to osascript backend");
+    }
+    sendNotificationMacViaOsa(title, truncated, soundName, debug);
+  });
 }
 
 function sendNotification(config: NotifyConfig, kind: NotificationKind, messages: any[]): void {
@@ -217,9 +360,9 @@ function sendNotification(config: NotifyConfig, kind: NotificationKind, messages
 
   const platform = process.platform;
   if (platform === "linux") {
-    sendNotificationLinux(payload.title, message, config.sound);
+    sendNotificationLinux(payload.title, message, config.sound, config.debug);
   } else if (platform === "darwin") {
-    sendNotificationMac(payload.title, message, config.sound);
+    sendNotificationMac(payload.title, message, config.sound, config.timeout, config.debug);
   } else if (config.debug) {
     console.log(`[pi-notify] unsupported platform: ${platform}`);
   }

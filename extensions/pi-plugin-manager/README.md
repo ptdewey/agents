@@ -16,7 +16,7 @@ you want the sample config instead.
 Edit `~/.pi/agent/plugins.ts`:
 
 ```ts
-import { definePlugins, git, local, npm, pkg } from "./extensions/pi-plugin-manager/dsl.js";
+import { definePlugins, git, local, npm } from "./extensions/pi-plugin-manager/dsl.js";
 
 export default definePlugins({
   plugins: [
@@ -25,7 +25,6 @@ export default definePlugins({
 
     npm("@org/pi-tools", { version: "^1.0.0" }),
     git("github.com/user/pi-tools", { ref: "main" }),
-    pkg("npm:package-source-as-written-in-settings"),
 
     npm("@org/mixed-pi-package", {
       resources: {
