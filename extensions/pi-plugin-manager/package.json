@@ -1,0 +1,15 @@
+{
+  "name": "pi-plugin-manager",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "dependencies": {
+    "jiti": "^2.7.0"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  }
+}

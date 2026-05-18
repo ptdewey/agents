@@ -2,6 +2,26 @@
 
 A collection of agent skills, subagents, and general coding agent settings that I've made or found useful.
 
+## Pi plugin manager extension
+
+`extensions/pi-plugin-manager/` is a global-first declarative plugin manager for Pi packages and local extensions. It reads `~/.pi/agent/plugins.ts` (or `.mts`, `.mjs`, `.js`, `.cjs`), reconciles `~/.pi/agent/settings.json`, and tracks managed entries in `~/.pi/agent/plugins-lock.json`.
+
+Bootstrap it globally, then run `/plugins init`, edit the generated config, and run `/plugins sync` or `/plugins reload`.
+
+```ts
+import { definePlugins, git, local, npm } from "./extensions/pi-plugin-manager/dsl.js";
+
+export default definePlugins({
+  plugins: [
+    local("~/projects/skills/extensions/review.ts"),
+    npm("@org/pi-tools", { version: "^1.0.0" }),
+    git("github.com/user/pi-tools", { ref: "main" }),
+  ],
+});
+```
+
+The DSL runtime is `dsl.js` and type declarations are in `dsl.d.ts`, so both TypeScript configs and JavaScript configs with `// @ts-check` get editor hints.
+
 ## Pi OTel metrics/traces extension
 
 `extensions/otel-metrics.ts` exports process-local cumulative OpenTelemetry metrics and spans from Pi extension events. It defaults to OTLP/HTTP at `http://localhost:14318/v1/metrics` for metrics and `http://localhost:14318/v1/traces` for traces, and can be pointed elsewhere with environment variables.
