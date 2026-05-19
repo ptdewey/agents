@@ -1,12 +1,16 @@
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
+import {
+  BorderedLoader,
+  type ExtensionAPI,
+  type ExtensionCommandContext,
 } from "@mariozechner/pi-coding-agent";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 const MANAGER_MESSAGE_TYPE = "pi-plugin-manager";
 const DEFAULT_AGENT_DIR = path.join(os.homedir(), ".pi", "agent");
@@ -19,8 +23,10 @@ const CONFIG_CANDIDATES = [
   "plugins.js",
   "plugins.cjs",
 ];
+const NETWORK_TIMEOUT_MS = 10_000;
 
 const requireFromHere = createRequire(import.meta.url);
+const execFileAsync = promisify(execFile);
 
 type ResourceFilter = boolean | string[];
 
@@ -62,18 +68,36 @@ type PiSettings = Record<string, unknown> & {
   extensions?: string[];
 };
 
+type LockedPackage = {
+  source: string;
+  lockedSource: string;
+  type: "npm" | "git" | "local";
+  name?: string;
+  version?: string;
+  repo?: string;
+  ref?: string;
+  commit?: string;
+  resolved?: string;
+  integrity?: string;
+};
+
 type LockFile = {
-  version: 1;
+  version: 1 | 2;
   updatedAt: string;
   managed: {
     packages: string[];
     extensions: string[];
   };
+  packages?: LockedPackage[];
 };
 
 type DesiredState = {
   packages: SettingsPackageEntry[];
   extensions: string[];
+};
+
+type BuildPlanOptions = {
+  refreshLocks?: boolean;
 };
 
 type Plan = {
@@ -354,6 +378,33 @@ function getPackageSource(entry: SettingsPackageEntry): string {
   return typeof entry === "string" ? entry : entry.source;
 }
 
+function withPackageSource(
+  entry: SettingsPackageEntry,
+  source: string,
+): SettingsPackageEntry {
+  return typeof entry === "string" ? source : { ...entry, source };
+}
+
+function packageIdentity(source: string): string {
+  const npmSource = parseNpmPackageSource(source);
+  if (npmSource) return `npm:${npmSource.name}`;
+
+  const gitSource = parseGitPackageSource(source);
+  if (gitSource) return `git:${gitSource.repo}`;
+
+  if (isLocalPackageSource(source)) {
+    return `local:${normalizePathForCompare(source)}`;
+  }
+
+  return source;
+}
+
+function isNpmVersionPinned(version: string | undefined): boolean {
+  return Boolean(
+    version && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version),
+  );
+}
+
 function packageEntriesEqual(
   a: SettingsPackageEntry,
   b: SettingsPackageEntry,
@@ -365,23 +416,241 @@ function arraysEqual(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
-function lockManagedEqual(lock: LockFile, desired: DesiredState): boolean {
+function lockComparable(lock: LockFile): unknown {
+  return {
+    version: 2,
+    managed: lock.managed,
+    packages: lock.packages ?? [],
+  };
+}
+
+function lockManagedEqual(lock: LockFile, nextLock: LockFile): boolean {
   return (
-    lock.version === 1 &&
-    arraysEqual(lock.managed?.packages ?? [], desired.packages.map(getPackageSource)) &&
-    arraysEqual(lock.managed?.extensions ?? [], desired.extensions)
+    JSON.stringify(lockComparable(lock)) ===
+    JSON.stringify(lockComparable(nextLock))
   );
+}
+
+function lockedPackagesByIdentity(lock: LockFile): Map<string, LockedPackage> {
+  const result = new Map<string, LockedPackage>();
+  for (const locked of lock.packages ?? []) {
+    result.set(packageIdentity(locked.source), locked);
+  }
+  return result;
+}
+
+async function lockDesiredPackages(
+  desiredPackages: SettingsPackageEntry[],
+  lock: LockFile,
+  refreshLocks: boolean,
+): Promise<{ packages: SettingsPackageEntry[]; locked: LockedPackage[] }> {
+  const existing = lockedPackagesByIdentity(lock);
+  const packages: SettingsPackageEntry[] = [];
+  const locked: LockedPackage[] = [];
+
+  for (const entry of desiredPackages) {
+    const source = getPackageSource(entry);
+    const identity = packageIdentity(source);
+    const current = existing.get(identity);
+    const next = await lockPackageSource(
+      source,
+      refreshLocks ? undefined : current,
+    );
+    locked.push(next);
+    packages.push(withPackageSource(entry, next.lockedSource));
+  }
+
+  return { packages, locked };
+}
+
+async function lockPackageSource(
+  source: string,
+  existing?: LockedPackage,
+): Promise<LockedPackage> {
+  const npmSource = parseNpmPackageSource(source);
+  if (npmSource) return lockNpmPackageSource(source, npmSource, existing);
+
+  const gitSource = parseGitPackageSource(source);
+  if (gitSource) return lockGitPackageSource(source, gitSource, existing);
+
+  return {
+    source,
+    lockedSource: source,
+    type: "local",
+  };
+}
+
+async function lockNpmPackageSource(
+  source: string,
+  npmSource: { name: string; version?: string },
+  existing?: LockedPackage,
+): Promise<LockedPackage> {
+  if (existing?.type === "npm" && existing.version && !npmSource.version) {
+    return { ...existing, source };
+  }
+
+  const version = isNpmVersionPinned(npmSource.version)
+    ? npmSource.version
+    : await resolveNpmVersion(npmSource.name, npmSource.version);
+  if (!version) {
+    throw new Error(
+      `Could not resolve an exact npm version for ${source}. ` +
+        `Pin it in plugins.ts or retry when npm metadata is available.`,
+    );
+  }
+
+  const metadata = await resolveNpmDistMetadata(npmSource.name, version);
+  return {
+    source,
+    lockedSource: `npm:${npmSource.name}@${version}`,
+    type: "npm",
+    name: npmSource.name,
+    version,
+    ...metadata,
+  };
+}
+
+async function resolveNpmVersion(
+  name: string,
+  range: string | undefined,
+): Promise<string | undefined> {
+  try {
+    const spec = range ? `${name}@${range}` : name;
+    const { stdout } = await execFileAsync(
+      "npm",
+      ["view", spec, "version", "--json"],
+      { timeout: NETWORK_TIMEOUT_MS },
+    );
+    const parsed = JSON.parse(stdout.trim());
+    if (typeof parsed === "string") return parsed;
+    if (Array.isArray(parsed) && typeof parsed.at(-1) === "string") {
+      return parsed.at(-1);
+    }
+  } catch {}
+  return readInstalledNpmVersion(name);
+}
+
+async function resolveNpmDistMetadata(
+  name: string,
+  version: string,
+): Promise<Pick<LockedPackage, "resolved" | "integrity">> {
+  try {
+    const { stdout } = await execFileAsync(
+      "npm",
+      ["view", `${name}@${version}`, "dist", "--json"],
+      { timeout: NETWORK_TIMEOUT_MS },
+    );
+    const parsed = JSON.parse(stdout.trim());
+    return {
+      resolved: typeof parsed?.tarball === "string" ? parsed.tarball : undefined,
+      integrity:
+        typeof parsed?.integrity === "string" ? parsed.integrity : undefined,
+    };
+  } catch {
+    return readInstalledNpmLockMetadata(name);
+  }
+}
+
+function readInstalledNpmVersion(name: string): string | undefined {
+  return readInstalledNpmPackageJson(name)?.version;
+}
+
+function readInstalledNpmPackageJson(name: string): any {
+  const file = path.join(
+    agentDir(),
+    "npm",
+    "node_modules",
+    name,
+    "package.json",
+  );
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+function readInstalledNpmLockMetadata(
+  name: string,
+): Pick<LockedPackage, "resolved" | "integrity"> {
+  const file = path.join(
+    agentDir(),
+    "npm",
+    "node_modules",
+    ".package-lock.json",
+  );
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    const entry = parsed?.packages?.[`node_modules/${name}`];
+    return {
+      resolved: typeof entry?.resolved === "string" ? entry.resolved : undefined,
+      integrity:
+        typeof entry?.integrity === "string" ? entry.integrity : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function lockGitPackageSource(
+  source: string,
+  gitSource: { repo: string; ref?: string },
+  existing?: LockedPackage,
+): Promise<LockedPackage> {
+  if (existing?.type === "git" && existing.commit && !gitSource.ref) {
+    return { ...existing, source };
+  }
+
+  const commit = await resolveGitCommit(gitSource.repo, gitSource.ref);
+  if (!commit) {
+    throw new Error(
+      `Could not resolve a git commit for ${source}. ` +
+        `Pin it to a commit SHA or retry when the remote is available.`,
+    );
+  }
+  return {
+    source,
+    lockedSource: `git:${gitSource.repo}@${commit}`,
+    type: "git",
+    repo: gitSource.repo,
+    ref: gitSource.ref,
+    commit,
+  };
+}
+
+async function resolveGitCommit(
+  repo: string,
+  ref: string | undefined,
+): Promise<string | undefined> {
+  if (/^[0-9a-f]{40}$/i.test(ref ?? "")) return ref;
+  try {
+    const remote = normalizeGitRemoteForLsRemote(repo);
+    const args = ref ? [remote, ref] : [remote, "HEAD"];
+    const { stdout } = await execFileAsync("git", ["ls-remote", ...args], {
+      timeout: NETWORK_TIMEOUT_MS,
+    });
+    const match = stdout.match(/^([0-9a-f]{40})\s+/m);
+    return match?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeGitRemoteForLsRemote(repo: string): string {
+  if (/^[^/:]+\.[^/]+\/.+/.test(repo)) return `https://${repo}`;
+  return repo;
 }
 
 function defaultLock(): LockFile {
   return {
-    version: 1,
+    version: 2,
     updatedAt: new Date(0).toISOString(),
     managed: { packages: [], extensions: [] },
+    packages: [],
   };
 }
 
-async function buildPlan(): Promise<Plan> {
+async function buildPlan(options: BuildPlanOptions = {}): Promise<Plan> {
   const foundConfigPath = await findConfigPath();
   if (!foundConfigPath) {
     throw new Error(
@@ -399,6 +668,15 @@ async function buildPlan(): Promise<Plan> {
   ]);
 
   const desired = normalizeDesired(config);
+  const lockedDesired = await lockDesiredPackages(
+    desired.packages,
+    lock,
+    Boolean(options.refreshLocks),
+  );
+  const desiredForSettings: DesiredState = {
+    packages: lockedDesired.packages,
+    extensions: desired.extensions,
+  };
   const nextSettings: PiSettings = { ...settings };
   const currentPackages = Array.isArray(settings.packages)
     ? settings.packages
@@ -408,8 +686,14 @@ async function buildPlan(): Promise<Plan> {
     : [];
   const changes: string[] = [];
 
-  const desiredPackageSources = new Set(desired.packages.map(getPackageSource));
-  const lockedPackageSources = new Set(lock.managed?.packages ?? []);
+  const desiredPackageSources = new Set(
+    desiredForSettings.packages.map((entry) =>
+      packageIdentity(getPackageSource(entry)),
+    ),
+  );
+  const lockedPackageSources = new Set(
+    (lock.managed?.packages ?? []).map(packageIdentity),
+  );
   const desiredExtensions = new Set(
     desired.extensions.map(normalizePathForCompare),
   );
@@ -422,12 +706,13 @@ async function buildPlan(): Promise<Plan> {
 
   for (const current of currentPackages) {
     const source = getPackageSource(current);
-    const desiredEntry = desired.packages.find(
-      (entry) => getPackageSource(entry) === source,
+    const desiredEntry = desiredForSettings.packages.find(
+      (entry) =>
+        packageIdentity(getPackageSource(entry)) === packageIdentity(source),
     );
 
     if (desiredEntry) {
-      usedDesiredSources.add(source);
+      usedDesiredSources.add(getPackageSource(desiredEntry));
       nextPackages.push(desiredEntry);
       if (!packageEntriesEqual(current, desiredEntry))
         changes.push(`update package ${source}`);
@@ -435,8 +720,8 @@ async function buildPlan(): Promise<Plan> {
     }
 
     if (
-      lockedPackageSources.has(source) &&
-      !desiredPackageSources.has(source)
+      lockedPackageSources.has(packageIdentity(source)) &&
+      !desiredPackageSources.has(packageIdentity(source))
     ) {
       changes.push(`remove package ${source}`);
       continue;
@@ -445,7 +730,7 @@ async function buildPlan(): Promise<Plan> {
     nextPackages.push(current);
   }
 
-  for (const desiredEntry of desired.packages) {
+  for (const desiredEntry of desiredForSettings.packages) {
     const source = getPackageSource(desiredEntry);
     if (usedDesiredSources.has(source)) continue;
     nextPackages.push(desiredEntry);
@@ -491,23 +776,24 @@ async function buildPlan(): Promise<Plan> {
   nextSettings.extensions = nextExtensions;
 
   const nextLock: LockFile = {
-    version: 1,
+    version: 2,
     updatedAt: new Date().toISOString(),
     managed: {
       packages: desired.packages.map(getPackageSource),
       extensions: desired.extensions,
     },
+    packages: lockedDesired.locked,
   };
 
   return {
     settingsPath: settingsFile,
     lockPath: lockFile,
     configPath: foundConfigPath,
-    desired,
+    desired: desiredForSettings,
     nextSettings,
     nextLock,
     changes,
-    lockChanged: !lockExists || !lockManagedEqual(lock, desired),
+    lockChanged: !lockExists || !lockManagedEqual(lock, nextLock),
   };
 }
 
@@ -816,6 +1102,45 @@ function sendReport(
   });
 }
 
+type LoadingResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: unknown };
+
+async function withLoadingPopup<T>(
+  ctx: ExtensionCommandContext,
+  message: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  if (!ctx.hasUI) return operation();
+
+  const result = await ctx.ui.custom<LoadingResult<T>>(
+    (tui, theme, _keybindings, done) => {
+      const loader = new BorderedLoader(tui, theme, message, {
+        cancellable: false,
+      });
+
+      queueMicrotask(() => {
+        operation()
+          .then((value) => done({ ok: true, value }))
+          .catch((error) => done({ ok: false, error }));
+      });
+
+      return loader;
+    },
+    {
+      overlay: true,
+      overlayOptions: {
+        anchor: "center",
+        width: 52,
+        maxHeight: 8,
+      },
+    },
+  );
+
+  if (result.ok) return result.value;
+  throw result.error;
+}
+
 function parseCommand(args: string): { command: string; flags: Set<string> } {
   const parts = args.trim().split(/\s+/).filter(Boolean);
   const command = parts[0] || "status";
@@ -828,7 +1153,11 @@ async function sync(
   ctx: ExtensionCommandContext,
   reload: boolean,
 ): Promise<void> {
-  const plan = await buildPlan();
+  const plan = await withLoadingPopup(
+    ctx,
+    "Resolving plugin pins...",
+    () => buildPlan(),
+  );
   const settingsChanged = plan.changes.length > 0;
   if (!settingsChanged && !plan.lockChanged) {
     sendReport(pi, formatPlan(plan, "Pi plugins already synced"));
@@ -872,7 +1201,7 @@ Commands:
 - /plugins plan - show desired settings changes
 - /plugins sync - write ~/.pi/agent/settings.json and plugins-lock.json
 - /plugins reload - sync, then reload Pi resources
-- /plugins update - run pi update --extensions
+- /plugins update - refresh locked npm/git versions and write settings
 - /plugins status - summarize desired plugins and drift
 - /plugins doctor - show paths and loader health
 
@@ -925,7 +1254,11 @@ export default function piPluginManager(pi: ExtensionAPI) {
           }
 
           case "plan": {
-            const plan = await buildPlan();
+            const plan = await withLoadingPopup(
+              ctx,
+              "Resolving plugin pins...",
+              () => buildPlan(),
+            );
             sendReport(pi, formatPlan(plan));
             return;
           }
@@ -939,29 +1272,29 @@ export default function piPluginManager(pi: ExtensionAPI) {
             return;
 
           case "update": {
-            const result = await pi.exec("pi", ["update", "--extensions"]);
-            sendReport(
-              pi,
-              [
-                "## Pi plugin update",
-                "",
-                `Exit code: ${result.code}`,
-                result.stdout
-                  ? `\nstdout:\n\n\`\`\`\n${result.stdout.trim()}\n\`\`\``
-                  : "",
-                result.stderr
-                  ? `\nstderr:\n\n\`\`\`\n${result.stderr.trim()}\n\`\`\``
-                  : "",
-              ]
-                .filter(Boolean)
-                .join("\n"),
-              { result },
+            const plan = await withLoadingPopup(
+              ctx,
+              "Refreshing plugin pins...",
+              () => buildPlan({ refreshLocks: true }),
             );
+            await applyPlan(plan);
+            sendReport(pi, formatPlan(plan, "Pi plugin lockfile updated"));
+            if (ctx.hasUI) {
+              const ok = await ctx.ui.confirm(
+                "Reload Pi resources?",
+                "The plugin lockfile was refreshed. Reload to install pinned package versions now?",
+              );
+              if (ok) await ctx.reload();
+            }
             return;
           }
 
           case "status": {
-            const plan = await buildPlan();
+            const plan = await withLoadingPopup(
+              ctx,
+              "Resolving plugin pins...",
+              () => buildPlan(),
+            );
             const heading =
               plan.changes.length === 0 && !plan.lockChanged
                 ? "Pi plugins status: synced"

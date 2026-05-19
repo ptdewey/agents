@@ -26,12 +26,12 @@ export interface LocalPluginOptions extends BasePluginOptions {
 }
 
 export interface NpmPluginOptions extends BasePluginOptions {
-  /** Optional npm version/range. Versioned specs are pinned by Pi update. */
+  /** Optional npm version/range. The plugin lockfile resolves ranges to exact versions. */
   version?: string;
 }
 
 export interface GitPluginOptions extends BasePluginOptions {
-  /** Optional git ref. Refs are pinned by Pi update. */
+  /** Optional git ref. The plugin lockfile resolves movable refs to commit SHAs when possible. */
   ref?: string;
 }
 

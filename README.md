@@ -33,7 +33,7 @@ Then run `/plugins sync` and `/plugins reload`.
 
 ## Pi plugin manager extension
 
-`extensions/pi-plugin-manager/` is a global-first declarative plugin manager for Pi packages and local extensions. It reads `~/.pi/agent/plugins.ts` (or `.mts`, `.mjs`, `.js`, `.cjs`), reconciles `~/.pi/agent/settings.json`, and tracks managed entries in `~/.pi/agent/plugins-lock.json`.
+`extensions/pi-plugin-manager/` is a global-first declarative plugin manager for Pi packages and local extensions. It reads `~/.pi/agent/plugins.ts` (or `.mts`, `.mjs`, `.js`, `.cjs`), reconciles `~/.pi/agent/settings.json`, and tracks managed entries plus resolved npm/git pins in `~/.pi/agent/plugins-lock.json`.
 
 Bootstrap it globally, then run `/plugins init`, edit the generated config, and run `/plugins sync` or `/plugins reload`.
 

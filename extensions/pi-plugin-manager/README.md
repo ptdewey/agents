@@ -44,7 +44,7 @@ Then run:
 /plugins sync
 ```
 
-`sync` writes the desired packages/extensions into global settings. Pi's normal package loader handles missing package installs on reload/startup.
+`sync` writes the desired packages/extensions into global settings. For npm and git packages it also resolves floating versions/refs into `plugins-lock.json` and writes pinned package sources into `settings.json`. Pi's normal package loader handles missing package installs on reload/startup.
 
 The manager writes only global files under `~/.pi/agent` by default:
 
@@ -79,7 +79,7 @@ and JavaScript-with-JSDoc editors can provide completions.
 - `/plugins plan` - show desired settings changes
 - `/plugins sync` - write `settings.json` and `plugins-lock.json`
 - `/plugins reload` - sync, then reload Pi resources
-- `/plugins update` - run `pi update --extensions`
+- `/plugins update` - refresh locked npm/git versions and write pinned settings
 - `/plugins status` - summarize desired plugins and drift
 - `/plugins doctor` - show paths and loader health
 
