@@ -1,0 +1,23 @@
+import {
+  definePlugins,
+  npm,
+  local,
+  git,
+} from "./extensions/pi-plugin-manager/dsl.js";
+
+export default definePlugins({
+  // Seeded from /Users/patrick.dewey/.pi/agent/settings.json.
+  plugins: [
+    npm("pi-subagents"),
+    npm("pi-hermes-memory"),
+    npm("pi-rtk-optimizer"),
+    npm("pi-bar"),
+    local("~/projects/skills/packages/pi-notify", {
+      package: true,
+      resources: {
+        extensions: ["extensions/pi-notify.ts"],
+      },
+    }),
+    npm("@latentminds/pi-quotas"),
+  ],
+});
