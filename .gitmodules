@@ -4,3 +4,6 @@
 [submodule "vendor/skill-temporal-developer"]
 	path = vendor/skill-temporal-developer
 	url = https://github.com/ptdewey/skill-temporal-developer.git
+[submodule "vendor/impeccable"]
+	path = vendor/impeccable
+	url = https://github.com/pbakaus/impeccable.git
