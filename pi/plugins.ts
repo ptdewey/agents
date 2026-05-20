@@ -19,5 +19,6 @@ export default definePlugins({
       },
     }),
     npm("@latentminds/pi-quotas"),
+    npm("@howaboua/pi-codex-conversion"),
   ],
 });

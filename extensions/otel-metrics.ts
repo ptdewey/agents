@@ -95,9 +95,9 @@ type Config = {
   debug: boolean;
 };
 
-const DEFAULT_ENDPOINT = "http://localhost:14318/v1/metrics";
+const DEFAULT_ENDPOINT = "http://localhost:4318/v1/metrics";
 const DEFAULT_FILE = join(homedir(), ".pi", "agent", "otel-metrics.jsonl");
-const DEFAULT_TRACE_ENDPOINT = "http://localhost:14318/v1/traces";
+const DEFAULT_TRACE_ENDPOINT = "http://localhost:4318/v1/traces";
 const DEFAULT_TRACE_FILE = join(homedir(), ".pi", "agent", "otel-traces.jsonl");
 const DEFAULT_HISTOGRAM_BOUNDS_SECONDS = [
   0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60,
@@ -454,10 +454,14 @@ class TraceStore {
   start(key: string, span: TraceSpan) {
     const existing = this.active.get(key);
     if (existing) {
-      this.end(key, {}, {
-        code: "STATUS_CODE_ERROR",
-        message: "replaced without end",
-      });
+      this.end(
+        key,
+        {},
+        {
+          code: "STATUS_CODE_ERROR",
+          message: "replaced without end",
+        },
+      );
     }
     this.active.set(key, { ...span, events: span.events ?? [] });
   }
@@ -472,11 +476,7 @@ class TraceStore {
     });
   }
 
-  end(
-    key: string,
-    attributes: Attributes = {},
-    status?: TraceSpan["status"],
-  ) {
+  end(key: string, attributes: Attributes = {}, status?: TraceSpan["status"]) {
     const span = this.active.get(key);
     if (!span) return;
     span.attributes = {
@@ -565,7 +565,10 @@ async function exportMetrics(config: Config, payload: unknown): Promise<void> {
   }
 }
 
-async function exportTraces(config: TraceConfig, payload: unknown): Promise<void> {
+async function exportTraces(
+  config: TraceConfig,
+  payload: unknown,
+): Promise<void> {
   switch (config.exporter) {
     case "off":
       return;
@@ -800,12 +803,18 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
 
   let interval: ReturnType<typeof setInterval> | undefined;
   if (config.exporter !== "off" || traceConfig.exporter !== "off") {
-    interval = setInterval(() => void flush(), Math.min(config.intervalMs, traceConfig.intervalMs));
+    interval = setInterval(
+      () => void flush(),
+      Math.min(config.intervalMs, traceConfig.intervalMs),
+    );
     interval.unref?.();
   }
 
   pi.on("session_start", async (event, ctx) => {
-    closeOpenTraces({ code: "STATUS_CODE_ERROR", message: "new session started" });
+    closeOpenTraces({
+      code: "STATUS_CODE_ERROR",
+      message: "new session started",
+    });
     await flush(ctx);
     cwd = ctx.cwd;
     sessionId =
@@ -923,8 +932,9 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
     };
 
     const extension =
-      extensionAttribute((event as { fromExtension?: unknown }).fromExtension) ??
-      extensionAttribute(message.fromExtension);
+      extensionAttribute(
+        (event as { fromExtension?: unknown }).fromExtension,
+      ) ?? extensionAttribute(message.fromExtension);
 
     metrics.addCounter("pi.messages", 1, {
       role: message.role ?? "unknown",
@@ -1069,7 +1079,12 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
     metrics.addCounter("pi.provider.requests", 1, modelAttributes(ctx));
     const key = `provider:${randomHex(4)}`;
     providerSpanKeys.push(key);
-    startTraceSpan(key, "provider request", "SPAN_KIND_CLIENT", modelAttributes(ctx));
+    startTraceSpan(
+      key,
+      "provider request",
+      "SPAN_KIND_CLIENT",
+      modelAttributes(ctx),
+    );
   });
 
   pi.on("after_provider_response", async (event, ctx) => {
@@ -1086,7 +1101,10 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
           status_code: event.status,
         },
         event.status >= 400
-          ? { code: "STATUS_CODE_ERROR", message: `provider status ${event.status}` }
+          ? {
+              code: "STATUS_CODE_ERROR",
+              message: `provider status ${event.status}`,
+            }
           : { code: "STATUS_CODE_OK" },
       );
     }
@@ -1155,10 +1173,7 @@ export default function otelMetricsExtension(pi: ExtensionAPI) {
         turnSpanKey = undefined;
         providerSpanKeys.length = 0;
         compactionSpanKeys.length = 0;
-        ctx.ui.notify(
-          "OTel telemetry state reset for this pi process",
-          "info",
-        );
+        ctx.ui.notify("OTel telemetry state reset for this pi process", "info");
         return;
       }
       if (command === "config") {
