@@ -20,5 +20,7 @@ export default definePlugins({
     }),
     npm("@latentminds/pi-quotas"),
     npm("@howaboua/pi-codex-conversion"),
+    npm("pi-codex-goal"),
+    npm("@tmustier/pi-ralph-wiggum"),
   ],
 });

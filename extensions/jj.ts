@@ -2,7 +2,6 @@
  * jj (Jujutsu) Extension
  *
  * Provides a single `jj` tool for working with jj repos.
- * - Auto-prefixes descriptions with "wip:"
  * - Blocks push commands (leave to user)
  * - Warns when git commands are used in jj repos
  */
@@ -294,12 +293,12 @@ export default function (pi: ExtensionAPI) {
     name: "jj",
     label: "jj",
     description:
-      "Run jj (Jujutsu) version control commands. Descriptions are auto-prefixed with 'wip:'. Push commands are disabled - leave pushing to the user.",
-    promptSnippet:
-      "Run jj commands (descriptions auto-prefixed with wip:, push disabled)",
+      "Run jj (Jujutsu) version control commands. Push commands are disabled - leave pushing to the user.",
+    promptSnippet: "Run jj commands (push disabled)",
     promptGuidelines: [
       "Use the jj tool instead of bash for jj commands in repos with .jj/ directory",
       "Never push - leave `jj git push` to the user",
+      "Do not prefix commit/change descriptions with `wip:` unless the change is explicitly experimental or the user asks for it",
     ],
     parameters: Type.Object({
       args: Type.Array(Type.String(), {
@@ -328,17 +327,6 @@ export default function (pi: ExtensionAPI) {
           isError: true,
           details: { blocked: "push" },
         };
-      }
-
-      // Auto-prefix descriptions with "wip:"
-      if (args[0] === "desc" || args[0] === "describe") {
-        const msgIdx = args.indexOf("-m");
-        if (msgIdx !== -1 && args[msgIdx + 1]) {
-          const msg = args[msgIdx + 1];
-          if (!msg.toLowerCase().startsWith("wip:")) {
-            args[msgIdx + 1] = `wip: ${msg}`;
-          }
-        }
       }
 
       const { stdout, stderr, code } = await pi.exec("jj", args);
