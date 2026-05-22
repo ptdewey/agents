@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "skills": null,
+  "managed": [
+    {
+      "name": "architect",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/architect",
+      "mode": "symlink"
+    },
+    {
+      "name": "deslop",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/deslop",
+      "mode": "symlink"
+    },
+    {
+      "name": "go-idioms",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/go-idioms",
+      "mode": "symlink"
+    },
+    {
+      "name": "impeccable",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/impeccable",
+      "mode": "symlink"
+    },
+    {
+      "name": "jj-workflow",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/jj-workflow",
+      "mode": "symlink"
+    },
+    {
+      "name": "learning-opportunities",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/learning-opportunities",
+      "mode": "symlink"
+    },
+    {
+      "name": "nix-go-vendor-hash",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/nix-go-vendor-hash",
+      "mode": "symlink"
+    },
+    {
+      "name": "orient",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/orient",
+      "mode": "symlink"
+    },
+    {
+      "name": "skill-temporal-developer",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/skill-temporal-developer",
+      "mode": "symlink"
+    },
+    {
+      "name": "architect",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/architect",
+      "mode": "symlink"
+    },
+    {
+      "name": "deslop",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/deslop",
+      "mode": "symlink"
+    },
+    {
+      "name": "go-idioms",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/go-idioms",
+      "mode": "symlink"
+    },
+    {
+      "name": "impeccable",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/impeccable",
+      "mode": "symlink"
+    },
+    {
+      "name": "jj-workflow",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/jj-workflow",
+      "mode": "symlink"
+    },
+    {
+      "name": "learning-opportunities",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/learning-opportunities",
+      "mode": "symlink"
+    },
+    {
+      "name": "nix-go-vendor-hash",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/nix-go-vendor-hash",
+      "mode": "symlink"
+    },
+    {
+      "name": "orient",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/orient",
+      "mode": "symlink"
+    },
+    {
+      "name": "skill-temporal-developer",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/skill-temporal-developer",
+      "mode": "symlink"
+    },
+    {
+      "name": "architect",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/architect",
+      "mode": "symlink"
+    },
+    {
+      "name": "deslop",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/deslop",
+      "mode": "symlink"
+    },
+    {
+      "name": "go-idioms",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/go-idioms",
+      "mode": "symlink"
+    },
+    {
+      "name": "impeccable",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/impeccable",
+      "mode": "symlink"
+    },
+    {
+      "name": "jj-workflow",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/jj-workflow",
+      "mode": "symlink"
+    },
+    {
+      "name": "learning-opportunities",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/learning-opportunities",
+      "mode": "symlink"
+    },
+    {
+      "name": "nix-go-vendor-hash",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/nix-go-vendor-hash",
+      "mode": "symlink"
+    },
+    {
+      "name": "orient",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/orient",
+      "mode": "symlink"
+    },
+    {
+      "name": "skill-temporal-developer",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/skill-temporal-developer",
+      "mode": "symlink"
+    },
+    {
+      "name": "architect",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/architect",
+      "mode": "symlink"
+    },
+    {
+      "name": "deslop",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/deslop",
+      "mode": "symlink"
+    },
+    {
+      "name": "go-idioms",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/go-idioms",
+      "mode": "symlink"
+    },
+    {
+      "name": "impeccable",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/impeccable",
+      "mode": "symlink"
+    },
+    {
+      "name": "jj-workflow",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/jj-workflow",
+      "mode": "symlink"
+    },
+    {
+      "name": "learning-opportunities",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/learning-opportunities",
+      "mode": "symlink"
+    },
+    {
+      "name": "nix-go-vendor-hash",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/nix-go-vendor-hash",
+      "mode": "symlink"
+    },
+    {
+      "name": "orient",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/orient",
+      "mode": "symlink"
+    },
+    {
+      "name": "skill-temporal-developer",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/skill-temporal-developer",
+      "mode": "symlink"
+    },
+    {
+      "name": "grill-me",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/grill-me",
+      "mode": "symlink"
+    },
+    {
+      "name": "handoff",
+      "target": "/Users/patrick.dewey/.pi/agent/skills",
+      "path": "/Users/patrick.dewey/.pi/agent/skills/handoff",
+      "mode": "symlink"
+    },
+    {
+      "name": "grill-me",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/grill-me",
+      "mode": "symlink"
+    },
+    {
+      "name": "handoff",
+      "target": "/Users/patrick.dewey/.claude/skills",
+      "path": "/Users/patrick.dewey/.claude/skills/handoff",
+      "mode": "symlink"
+    },
+    {
+      "name": "grill-me",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/grill-me",
+      "mode": "symlink"
+    },
+    {
+      "name": "handoff",
+      "target": "/Users/patrick.dewey/.codex/skills",
+      "path": "/Users/patrick.dewey/.codex/skills/handoff",
+      "mode": "symlink"
+    },
+    {
+      "name": "grill-me",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/grill-me",
+      "mode": "symlink"
+    },
+    {
+      "name": "handoff",
+      "target": "/Users/patrick.dewey/.config/opencode/skill",
+      "path": "/Users/patrick.dewey/.config/opencode/skill/handoff",
+      "mode": "symlink"
+    }
+  ]
+}

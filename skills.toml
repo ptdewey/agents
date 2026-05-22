@@ -1,0 +1,57 @@
+# Declarative agent skill manifest.
+# This file may be edited by hand or modified with the skillman CLI.
+
+[manifest]
+version = 1
+
+[install]
+targets = [
+    "~/.pi/agent/skills", 
+    "~/.claude/skills", 
+    "~/.codex/skills",
+    "~/.config/opencode/skill",
+]
+
+[[skills]]
+name = "architect"
+source = "skills/architect"
+
+[[skills]]
+name = "deslop"
+source = "skills/deslop"
+
+[[skills]]
+name = "go-idioms"
+source = "skills/go-idioms"
+
+[[skills]]
+name = "impeccable"
+source = "skills/impeccable"
+
+[[skills]]
+name = "jj-workflow"
+source = "skills/jj-workflow"
+
+[[skills]]
+name = "learning-opportunities"
+source = "skills/learning-opportunities"
+
+[[skills]]
+name = "nix-go-vendor-hash"
+source = "skills/nix-go-vendor-hash"
+
+[[skills]]
+name = "orient"
+source = "skills/orient"
+
+[[skills]]
+name = "skill-temporal-developer"
+source = "skills/skill-temporal-developer"
+
+[[skills]]
+name = "grill-me"
+source = "skills/grill-me"
+
+[[skills]]
+name = "handoff"
+source = "skills/handoff"
