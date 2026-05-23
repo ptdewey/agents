@@ -18,7 +18,7 @@ source = "skills/architect"
 
 [[skills]]
 name = "deslop"
-source = "skills/deslop"
+source = "skills/skill-deslop"
 
 [[skills]]
 name = "go-idioms"
