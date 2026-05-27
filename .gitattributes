@@ -1,2 +1,2 @@
-skills/ linguist-vendored
-vendors/ linguist-vendored
+skills/impeccable/** linguist-vendored
+vendor/impeccable/** linguist-vendored
