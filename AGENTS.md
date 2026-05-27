@@ -15,7 +15,7 @@ Common mappings I use:
 - `jj bookmark set <name> -r @-` — move bookmark (like `git branch -f`)
 - `jj git push` — push; add `--allow-new` for first push of a new bookmark
 - `jj git fetch` — fetch
-- `jj restore <path>` — undo file changes (use instead of `git checkout --`)
+- `jj restore <path>` — undo file changes (use instead of `git checkout --`); agents must not use this unless the user explicitly asks to revert changes
 - `jj op log` / `jj op restore <id>` — rewind the whole repo state
 
 Shipping sequence I typically use: `jj desc -m …` → `jj bookmark set <name> -r @` → `jj git push` (with `--allow-new` if new) → `jj new`.

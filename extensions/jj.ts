@@ -146,7 +146,7 @@ function buildJjSnapshot(status: string): JjSnapshot {
   return {
     status,
     footerStatus,
-    contextMessage: `**jj repo detected** - Use the \`jj\` tool for version control (not git/bash).\n\nCurrent change: ${changeLine}\n\nStatus:\n\`\`\`\n${status.trim()}\n\`\`\``,
+    contextMessage: `**jj repo detected** - Use the \`jj\` tool for version control (not git/bash). Do not use \`jj restore\` or \`jj abandon\` unless the user explicitly asks you to revert changes.\n\nCurrent change: ${changeLine}\n\nStatus:\n\`\`\`\n${status.trim()}\n\`\`\``,
   };
 }
 
@@ -245,7 +245,7 @@ async function fetchJjSnapshot(
       status: stderr || "jj st failed",
       footerStatus: "status unavailable",
       contextMessage:
-        "**jj repo detected** - Use the `jj` tool for version control (not git/bash).",
+        "**jj repo detected** - Use the `jj` tool for version control (not git/bash). Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes.",
     };
   }
 
@@ -298,6 +298,7 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: [
       "Use the jj tool instead of bash for jj commands in repos with .jj/ directory",
       "Never push - leave `jj git push` to the user",
+      "Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes",
       "Do not prefix commit/change descriptions with `wip:` unless the change is explicitly experimental or the user asks for it",
     ],
     parameters: Type.Object({
@@ -314,6 +315,34 @@ export default function (pi: ExtensionAPI) {
     },
     async execute(toolCallId, params) {
       const args = [...params.args];
+
+      // Block destructive revert commands unless the user has explicitly asked
+      // for a revert. This prevents parallel agents sharing a working copy from
+      // repeatedly discarding each other's changes after observing them in
+      // `jj st`.
+      const userRequestedRevertFlag = "--pi-user-requested-revert";
+      const userRequestedRevert = args.includes(userRequestedRevertFlag);
+      if (userRequestedRevert) {
+        args.splice(args.indexOf(userRequestedRevertFlag), 1);
+      }
+
+      if (
+        (args[0] === "restore" || args[0] === "abandon") &&
+        !userRequestedRevert
+      ) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `Blocked: \`jj ${args[0]}\` reverts changes and may discard work from another parallel agent. ` +
+                "Only use it when the user explicitly asks you to revert changes. If the user did ask, rerun with `--pi-user-requested-revert`.",
+            },
+          ],
+          isError: true,
+          details: { blocked: args[0], args },
+        };
+      }
 
       // Block push commands
       if (args[0] === "git" && args[1] === "push") {

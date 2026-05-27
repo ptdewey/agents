@@ -21,6 +21,7 @@ When working in jj repos:
 2. **Use `wip:` prefix** - When describing changes, prefix with `wip:` so the user can write a final message later
 3. **Never push** - Leave `jj git push` to the user
 4. **No staging area** - jj snapshots the working copy automatically, there's no `git add`
+5. **Don't revert unless asked** - Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes. In parallel agent runs, status may include another agent's work.
 
 ## Core Concepts
 
@@ -71,11 +72,11 @@ jj squash                # Fold current change into parent
 # Fold and continue editing parent
 jj squash && jj edit @-
 
-# Abandon current change
-jj abandon
+# Abandon current change - only when the user explicitly asked to revert
+jj abandon --pi-user-requested-revert
 
-# Restore file to previous state
-jj restore <path>
+# Restore file to previous state - only when the user explicitly asked to revert
+jj restore <path> --pi-user-requested-revert
 ```
 
 ### Bookmarks (like git branches)
