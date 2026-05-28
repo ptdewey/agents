@@ -2,7 +2,7 @@
  * Sourced from https://github.com/mitsuhiko/agent-stuff/blob/main/extensions/whimsical.ts (Under Apache License v2.0)
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const messages = [
   // Short
