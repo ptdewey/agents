@@ -1,0 +1,322 @@
+{
+  "title": "Coding agents — usage & spend (v3)",
+  "uid": "coding-agents-v3",
+  "tags": ["pi", "claude-code", "opencode", "cost", "v3"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-7d", "to": "now" },
+  "graphTooltip": 1,
+  "editable": true,
+  "annotations": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "label": "Model",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "refresh": 2,
+        "query": "label_values({__name__=~\"pi_tokens_total|claude_code_token_usage_tokens_total|opencode_token_usage_tokens_total\"}, model)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "service",
+        "label": "Source",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "refresh": 2,
+        "query": "label_values({__name__=~\"pi_tokens_total|claude_code_token_usage_tokens_total|opencode_token_usage_tokens_total\"}, service_name)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row", "id": 100, "title": "Headline",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 1, "type": "stat", "title": "Spend (window)",
+      "description": "Total cost across pi + claude-code + opencode over the selected window.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 2, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }] }, "noValue": "$0.00" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [
+        { "refId": "A", "expr": "(sum(increase(pi_cost_usd_total{type=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0)) + (sum(increase(claude_code_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0)) + (sum(increase(opencode_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0))" }
+      ]
+    },
+    {
+      "id": 2, "type": "stat", "title": "Billable tokens (window)",
+      "description": "input + output + cacheCreation + reasoning. cacheRead excluded — billed at ~10% of input.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "noValue": "0" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [
+        { "refId": "A", "expr": "(sum(increase(pi_tokens_total{type=~\"input|output|cache_write|reasoning\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0)) + (sum(increase(claude_code_token_usage_tokens_total{type=~\"input|output|cacheCreation\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0)) + (sum(increase(opencode_token_usage_tokens_total{type=~\"input|output|cacheCreation|reasoning\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0))" }
+      ]
+    },
+    {
+      "id": 3, "type": "gauge", "title": "Cache hit ratio (window)",
+      "description": "cacheRead / (cacheRead + input). Higher = more context reuse.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1, "min": 0, "max": 1, "noValue": "N/A", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red" }, { "color": "yellow", "value": 0.5 }, { "color": "green", "value": 0.8 }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdMarkers": true },
+      "targets": [
+        { "refId": "A", "expr": "((sum(increase(pi_tokens_total{type=\"cache_read\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0)) + (sum(increase(claude_code_token_usage_tokens_total{type=\"cacheRead\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0)) + (sum(increase(opencode_token_usage_tokens_total{type=\"cacheRead\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0))) / ((sum(increase(pi_tokens_total{type=~\"cache_read|input\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0)) + (sum(increase(claude_code_token_usage_tokens_total{type=~\"cacheRead|input\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0)) + (sum(increase(opencode_token_usage_tokens_total{type=~\"cacheRead|input\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or on() vector(0)))" }
+      ]
+    },
+    {
+      "type": "row", "id": 200, "title": "Token mix",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Token volume by type over time (stacked)",
+      "description": "Stacked bars per interval. cacheRead usually dominates (cheap). cacheCreation spikes when a new context is established; reasoning shows extended-thinking burn. Type labels are normalized: pi's cache_read/cache_write are folded into cacheRead/cacheCreation.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 10, "w": 16, "x": 0, "y": 7 },
+      "interval": "1m",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 80, "stacking": { "mode": "normal" } } }, "overrides": [
+        { "matcher": { "id": "byName", "options": "cacheRead" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#37872d" } }] },
+        { "matcher": { "id": "byName", "options": "input" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#1f60c4" } }] },
+        { "matcher": { "id": "byName", "options": "output" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#fa6400" } }] },
+        { "matcher": { "id": "byName", "options": "cacheCreation" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#b877d9" } }] },
+        { "matcher": { "id": "byName", "options": "reasoning" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#e02f44" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (type) ((label_replace(label_replace(increase(pi_tokens_total{type!=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__interval]), \"type\", \"cacheRead\", \"type\", \"cache_read\"), \"type\", \"cacheCreation\", \"type\", \"cache_write\")) or (increase(claude_code_token_usage_tokens_total{model=~\"$model\",service_name=~\"$service\"}[$__interval])) or (increase(opencode_token_usage_tokens_total{model=~\"$model\",service_name=~\"$service\"}[$__interval])))", "legendFormat": "{{type}}" }
+      ]
+    },
+    {
+      "id": 11, "type": "piechart", "title": "Token mix (window)",
+      "description": "Share of total tokens by type across the window.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 10, "w": 8, "x": 16, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false }, "pieType": "donut", "tooltip": { "mode": "single" }, "legend": { "displayMode": "table", "placement": "right", "values": ["percent", "value"] } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (type) ((label_replace(label_replace(increase(pi_tokens_total{type!=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__range]), \"type\", \"cacheRead\", \"type\", \"cache_read\"), \"type\", \"cacheCreation\", \"type\", \"cache_write\")) or (increase(claude_code_token_usage_tokens_total{model=~\"$model\",service_name=~\"$service\"}[$__range])) or (increase(opencode_token_usage_tokens_total{model=~\"$model\",service_name=~\"$service\"}[$__range])))", "instant": true, "legendFormat": "{{type}}" }
+      ]
+    },
+
+    {
+      "type": "row", "id": 300, "title": "Cost by model",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 20, "type": "barchart", "title": "Total cost by model (window)",
+      "description": "Flat horizontal bars, sorted descending. Top of the list is where the money goes.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 18 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3, "color": { "mode": "palette-classic-by-name" } } },
+      "options": { "orientation": "horizontal", "showValue": "auto", "stacking": "none", "legend": { "showLegend": false }, "tooltip": { "mode": "single" }, "colorByField": "model", "xField": "model" },
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true } } },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [{ "field": "Value", "desc": true }] } }
+      ],
+      "targets": [
+        { "refId": "A", "expr": "sum by (model) ((increase(pi_cost_usd_total{type=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or (increase(claude_code_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range])) or (increase(opencode_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range])))", "instant": true, "format": "table" }
+      ]
+    },
+    {
+      "id": 21, "type": "barchart", "title": "Cost by model — stacked by source (window)",
+      "description": "Same totals as the panel on the left, but each model bar is split by which agent (claude-code / pi / opencode) drove the spend.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 18 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3, "color": { "mode": "palette-classic" } } },
+      "options": { "orientation": "horizontal", "showValue": "auto", "stacking": "normal", "xTickLabelRotation": 0, "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" }, "xField": "model\\service_name" },
+      "transformations": [
+        { "id": "groupingToMatrix", "options": { "columnField": "service_name", "rowField": "model", "valueField": "Value" } }
+      ],
+      "targets": [
+        { "refId": "A", "expr": "sum by (model, service_name) ((increase(pi_cost_usd_total{type=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__range])) or (increase(claude_code_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range])) or (increase(opencode_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range])))", "instant": true, "format": "table" }
+      ]
+    },
+    {
+      "id": 22, "type": "barchart", "title": "Tokens by model — stacked by type (window)",
+      "description": "Each model bar split by token type. Use this to spot models burning lots of cacheCreation vs cheap cacheRead.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 27 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "palette-classic" } }, "overrides": [
+        { "matcher": { "id": "byName", "options": "cacheRead" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#37872d" } }] },
+        { "matcher": { "id": "byName", "options": "input" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#1f60c4" } }] },
+        { "matcher": { "id": "byName", "options": "output" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#fa6400" } }] },
+        { "matcher": { "id": "byName", "options": "cacheCreation" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#b877d9" } }] },
+        { "matcher": { "id": "byName", "options": "reasoning" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#e02f44" } }] }
+      ] },
+      "options": { "orientation": "horizontal", "showValue": "auto", "stacking": "normal", "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" }, "xField": "model\\type" },
+      "transformations": [
+        { "id": "groupingToMatrix", "options": { "columnField": "type", "rowField": "model", "valueField": "Value" } }
+      ],
+      "targets": [
+        { "refId": "A", "expr": "sum by (model, type) ((label_replace(label_replace(increase(pi_tokens_total{type!=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__range]), \"type\", \"cacheRead\", \"type\", \"cache_read\"), \"type\", \"cacheCreation\", \"type\", \"cache_write\")) or (increase(claude_code_token_usage_tokens_total{model=~\"$model\",service_name=~\"$service\"}[$__range])) or (increase(opencode_token_usage_tokens_total{model=~\"$model\",service_name=~\"$service\"}[$__range])))", "instant": true, "format": "table" }
+      ]
+    },
+
+    {
+      "type": "row", "id": 400, "title": "Cost and tokens by provider",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 30, "type": "barchart", "title": "Cost by provider — stacked by source (window)",
+      "description": "Provider is inferred from the model name (claude-* → anthropic, gpt-* → openai, gemini-* → google, else 'other'). Each bar split by which agent (pi/claude-code/opencode) drove the spend.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 37 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3, "color": { "mode": "palette-classic" } } },
+      "options": { "orientation": "horizontal", "showValue": "auto", "stacking": "normal", "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" }, "xField": "provider\\service_name" },
+      "transformations": [
+        { "id": "groupingToMatrix", "options": { "columnField": "service_name", "rowField": "provider", "valueField": "Value" } }
+      ],
+      "targets": [
+        { "refId": "A", "expr": "sum by (provider, service_name) ((label_replace(label_replace(label_replace(label_replace(increase(pi_cost_usd_total{type=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__range]), \"provider\", \"other\", \"\", \"\"), \"provider\", \"anthropic\", \"model\", \"claude-.*\"), \"provider\", \"google\", \"model\", \"gemini-.*\"), \"provider\", \"openai\", \"model\", \"gpt-.*\")) or (label_replace(label_replace(label_replace(label_replace(increase(claude_code_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range]), \"provider\", \"other\", \"\", \"\"), \"provider\", \"anthropic\", \"model\", \"claude-.*\"), \"provider\", \"google\", \"model\", \"gemini-.*\"), \"provider\", \"openai\", \"model\", \"gpt-.*\")) or (label_replace(label_replace(label_replace(label_replace(increase(opencode_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range]), \"provider\", \"other\", \"\", \"\"), \"provider\", \"anthropic\", \"model\", \"claude-.*\"), \"provider\", \"google\", \"model\", \"gemini-.*\"), \"provider\", \"openai\", \"model\", \"gpt-.*\")))", "instant": true, "format": "table" }
+      ]
+    },
+    {
+      "id": 31, "type": "barchart", "title": "Tokens by provider — stacked by type (window)",
+      "description": "Billable + cacheRead tokens by provider, each bar split by token type. Big cacheRead segment = healthy context reuse.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 37 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [
+        { "matcher": { "id": "byName", "options": "cacheRead" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#37872d" } }] },
+        { "matcher": { "id": "byName", "options": "input" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#1f60c4" } }] },
+        { "matcher": { "id": "byName", "options": "output" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#fa6400" } }] },
+        { "matcher": { "id": "byName", "options": "cacheCreation" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#b877d9" } }] },
+        { "matcher": { "id": "byName", "options": "reasoning" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#e02f44" } }] }
+      ] },
+      "options": { "orientation": "horizontal", "showValue": "auto", "stacking": "normal", "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" }, "xField": "provider\\type" },
+      "transformations": [
+        { "id": "groupingToMatrix", "options": { "columnField": "type", "rowField": "provider", "valueField": "Value" } }
+      ],
+      "targets": [
+        { "refId": "A", "expr": "sum by (provider, type) ((label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(increase(pi_tokens_total{type!=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__range]), \"type\", \"cacheRead\", \"type\", \"cache_read\"), \"type\", \"cacheCreation\", \"type\", \"cache_write\"), \"provider\", \"other\", \"\", \"\"), \"provider\", \"anthropic\", \"model\", \"claude-.*\"), \"provider\", \"google\", \"model\", \"gemini-.*\"), \"provider\", \"openai\", \"model\", \"gpt-.*\")) or (label_replace(label_replace(label_replace(label_replace(increase(claude_code_token_usage_tokens_total{model=~\"$model\",service_name=~\"$service\"}[$__range]), \"provider\", \"other\", \"\", \"\"), \"provider\", \"anthropic\", \"model\", \"claude-.*\"), \"provider\", \"google\", \"model\", \"gemini-.*\"), \"provider\", \"openai\", \"model\", \"gpt-.*\")) or (label_replace(label_replace(label_replace(label_replace(increase(opencode_token_usage_tokens_total{model=~\"$model\",service_name=~\"$service\"}[$__range]), \"provider\", \"other\", \"\", \"\"), \"provider\", \"anthropic\", \"model\", \"claude-.*\"), \"provider\", \"google\", \"model\", \"gemini-.*\"), \"provider\", \"openai\", \"model\", \"gpt-.*\")))", "instant": true, "format": "table" }
+      ]
+    },
+
+    {
+      "type": "row", "id": 500, "title": "Spend over time",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 },
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 40, "type": "timeseries", "title": "Spend per interval — stacked by source",
+      "description": "Each bar is one interval of spend, stacked by agent. Bars never overlap, so legend Total = actual spend in this window.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 47 },
+      "interval": "1m",
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3, "custom": { "drawStyle": "bars", "fillOpacity": 80, "stacking": { "mode": "normal" } } } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "pi",     "expr": "sum by (service_name) (increase(pi_cost_usd_total{type=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{service_name}}" },
+        { "refId": "claude", "expr": "sum by (service_name) (increase(claude_code_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{service_name}}" },
+        { "refId": "open",   "expr": "sum by (service_name) (increase(opencode_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{service_name}}" }
+      ]
+    },
+    {
+      "id": 41, "type": "timeseries", "title": "Spend per interval — stacked by model",
+      "description": "Same window-equals-bar-sum guarantee, but stacked by model so you can see which model is currently burning budget.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 47 },
+      "interval": "1m",
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3, "custom": { "drawStyle": "bars", "fillOpacity": 80, "stacking": { "mode": "normal" } } } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "pi",     "expr": "sum by (model) (increase(pi_cost_usd_total{type=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{model}}" },
+        { "refId": "claude", "expr": "sum by (model) (increase(claude_code_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{model}}" },
+        { "refId": "open",   "expr": "sum by (model) (increase(opencode_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{model}}" }
+      ]
+    },
+
+    {
+      "type": "row", "id": 600, "title": "Efficiency",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 56 },
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 50, "type": "table", "title": "Cost per 1k output tokens by model",
+      "description": "Effective $/1k output. Lower is better. Large variance vs published price means reasoning overhead or cache-creation tax.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 57 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 4 } },
+      "options": { "showHeader": true },
+      "transformations": [
+        { "id": "merge" },
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "$/1k output" } } },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [{ "field": "$/1k output", "desc": true }] } }
+      ],
+      "targets": [
+        { "refId": "pi",     "expr": "sum by (model) (increase(pi_cost_usd_total{type=\"total\",model=~\"$model\",service_name=~\"$service\"}[$__range])) / (sum by (model) (increase(pi_tokens_total{type=\"output\",model=~\"$model\",service_name=~\"$service\"}[$__range])) / 1000)", "instant": true, "format": "table" },
+        { "refId": "claude", "expr": "sum by (model) (increase(claude_code_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range])) / (sum by (model) (increase(claude_code_token_usage_tokens_total{type=\"output\",model=~\"$model\",service_name=~\"$service\"}[$__range])) / 1000)", "instant": true, "format": "table" },
+        { "refId": "open",   "expr": "sum by (model) (increase(opencode_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range])) / (sum by (model) (increase(opencode_token_usage_tokens_total{type=\"output\",model=~\"$model\",service_name=~\"$service\"}[$__range])) / 1000)", "instant": true, "format": "table" }
+      ]
+    },
+    {
+      "id": 52, "type": "stat", "title": "Cost per active minute (Claude Code)",
+      "description": "Spend / Claude Code reported active time. High = each terminal minute is expensive.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 57 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3, "noValue": "N/A" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(claude_code_cost_usage_USD_total{model=~\"$model\",service_name=~\"$service\"}[$__range])) / (sum(increase(claude_code_active_time_seconds_total{service_name=~\"$service\"}[$__range])) / 60)" }
+      ]
+    },
+    {
+      "id": 53, "type": "stat", "title": "Edit accept rate (Claude Code)",
+      "description": "Fraction of edit-tool decisions accepted. Becomes meaningful once rejection events appear.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 61 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1, "min": 0, "max": 1, "noValue": "N/A", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red" }, { "color": "yellow", "value": 0.5 }, { "color": "green", "value": 0.8 }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(claude_code_code_edit_tool_decision_total{decision=\"accept\",service_name=~\"$service\"}[$__range])) / sum(increase(claude_code_code_edit_tool_decision_total{service_name=~\"$service\"}[$__range]))" }
+      ]
+    },
+
+    {
+      "type": "row", "id": 700, "title": "Activity (collapsed)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 },
+      "collapsed": true, "panels": [
+        {
+          "id": 60, "type": "timeseries", "title": "Sessions started",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 7, "w": 12, "x": 0, "y": 67 },
+          "interval": "1m",
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 80, "stacking": { "mode": "normal" } } } },
+          "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            { "refId": "pi",     "expr": "sum by (service_name) (increase(pi_session_starts_total{service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{service_name}}" },
+            { "refId": "claude", "expr": "sum by (service_name) (increase(claude_code_session_count_total{service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{service_name}}" },
+            { "refId": "open",   "expr": "sum by (service_name) (increase(opencode_session_count_total{service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{service_name}}" }
+          ]
+        },
+        {
+          "id": 61, "type": "timeseries", "title": "Lines added vs removed (Claude Code)",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 7, "w": 12, "x": 12, "y": 67 },
+          "interval": "1m",
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 80, "stacking": { "mode": "normal" } } }, "overrides": [
+            { "matcher": { "id": "byName", "options": "added" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+            { "matcher": { "id": "byName", "options": "removed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+          ] },
+          "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            { "refId": "A", "expr": "sum by (type) (increase(claude_code_lines_of_code_count_total{service_name=~\"$service\"}[$__interval]))", "legendFormat": "{{type}}" }
+          ]
+        }
+      ]
+    }
+  ]
+}
