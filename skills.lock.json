@@ -3,21 +3,9 @@
   "skills": null,
   "managed": [
     {
-      "name": "deslop",
-      "target": "/home/patrick/.pi/agent/skills",
-      "path": "/home/patrick/.pi/agent/skills/deslop",
-      "mode": "symlink"
-    },
-    {
       "name": "architect",
       "target": "/home/patrick/.claude/skills",
       "path": "/home/patrick/.claude/skills/architect",
-      "mode": "symlink"
-    },
-    {
-      "name": "deslop",
-      "target": "/home/patrick/.claude/skills",
-      "path": "/home/patrick/.claude/skills/deslop",
       "mode": "symlink"
     },
     {
@@ -66,6 +54,12 @@
       "name": "handoff",
       "target": "/home/patrick/.claude/skills",
       "path": "/home/patrick/.claude/skills/handoff",
+      "mode": "symlink"
+    },
+    {
+      "name": "thermo-nuclear-code-quality-review",
+      "target": "/home/patrick/.claude/skills",
+      "path": "/home/patrick/.claude/skills/thermo-nuclear-code-quality-review",
       "mode": "symlink"
     }
   ]

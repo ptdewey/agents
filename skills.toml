@@ -17,7 +17,7 @@ name = "architect"
 source = "skills/architect"
 
 [[skills]]
-name = "deslop"
+name = "skill-deslop"
 source = "skills/skill-deslop"
 
 [[skills]]
@@ -55,3 +55,7 @@ source = "skills/grill-me"
 [[skills]]
 name = "handoff"
 source = "skills/handoff"
+
+[[skills]]
+name = "thermo-nuclear-code-quality-review"
+source = "skills/thermo-nuclear-code-quality-review"
