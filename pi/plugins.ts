@@ -12,6 +12,7 @@ export default definePlugins({
     npm("pi-hermes-memory"),
     npm("pi-rtk-optimizer"),
     npm("pi-bar"),
+    local("~/projects/agents/extensions/thinking-settings.ts"),
     local("~/projects/skills/packages/pi-notify", {
       package: true,
       resources: {
