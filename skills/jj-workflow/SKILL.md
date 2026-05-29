@@ -22,6 +22,7 @@ When working in jj repos:
 3. **Never push** - Leave `jj git push` to the user
 4. **No staging area** - jj snapshots the working copy automatically, there's no `git add`
 5. **Don't revert unless asked** - Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes. In parallel agent runs, status may include another agent's work.
+6. **Preserve unrelated edits** - Treat unrelated existing changes as read-only unless told otherwise; if touching the same code, preserve unrelated edits while making the requested change.
 
 ## Core Concepts
 

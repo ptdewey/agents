@@ -22,6 +22,8 @@ Shipping sequence I typically use: `jj desc -m …` → `jj bookmark set <name> 
 
 Do not suggest `git add`, `git commit`, `git stash`, `git checkout`, `git reset`, or `git rebase` in a jj workspace. jj snapshots the working copy automatically — there is no staging area.
 
+Treat unrelated existing changes as read-only unless told otherwise; the user or another agent may have made them. If you are working on the same code, preserve unrelated edits while making the needed change.
+
 ## Use Go Tooling Effectively
 
 When working in Go codebases, always do the following:

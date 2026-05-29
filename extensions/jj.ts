@@ -146,7 +146,7 @@ function buildJjSnapshot(status: string): JjSnapshot {
   return {
     status,
     footerStatus,
-    contextMessage: `**jj repo detected** - Use the \`jj\` tool for version control (not git/bash). Do not use \`jj restore\` or \`jj abandon\` unless the user explicitly asks you to revert changes.\n\nCurrent change: ${changeLine}\n\nStatus:\n\`\`\`\n${status.trim()}\n\`\`\``,
+    contextMessage: `**jj repo detected** - Use the \`jj\` tool for version control (not git/bash). Do not use \`jj restore\` or \`jj abandon\` unless the user explicitly asks you to revert changes. Treat unrelated existing changes as read-only unless told otherwise.\n\nCurrent change: ${changeLine}\n\nStatus:\n\`\`\`\n${status.trim()}\n\`\`\``,
   };
 }
 
@@ -245,7 +245,7 @@ async function fetchJjSnapshot(
       status: stderr || "jj st failed",
       footerStatus: "status unavailable",
       contextMessage:
-        "**jj repo detected** - Use the `jj` tool for version control (not git/bash). Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes.",
+        "**jj repo detected** - Use the `jj` tool for version control (not git/bash). Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes. Treat unrelated existing changes as read-only unless told otherwise.",
     };
   }
 
@@ -299,6 +299,7 @@ export default function (pi: ExtensionAPI) {
       "Use the jj tool instead of bash for jj commands in repos with .jj/ directory",
       "Never push - leave `jj git push` to the user",
       "Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes",
+      "Treat unrelated existing changes as read-only unless told otherwise; user or another agent may have made them",
       "Do not prefix commit/change descriptions with `wip:` unless the change is explicitly experimental or the user asks for it",
     ],
     parameters: Type.Object({
