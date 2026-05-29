@@ -41,10 +41,6 @@ name = "nix-go-vendor-hash"
 source = "skills/nix-go-vendor-hash"
 
 [[skills]]
-name = "orient"
-source = "skills/orient"
-
-[[skills]]
 name = "skill-temporal-developer"
 source = "skills/skill-temporal-developer"
 
@@ -59,3 +55,23 @@ source = "skills/handoff"
 [[skills]]
 name = "thermo-nuclear-code-quality-review"
 source = "skills/thermo-nuclear-code-quality-review"
+
+[[skills]]
+name = "grill-with-docs"
+source = "skills/grill-with-docs"
+
+[[skills]]
+name = "to-prd"
+source = "skills/to-prd"
+
+[[skills]]
+name = "to-issues"
+source = "skills/to-issues"
+
+[[skills]]
+name = "tdd"
+source = "skills/tdd"
+
+[[skills]]
+name = "improve-codebase-architecture"
+source = "skills/improve-codebase-architecture"
