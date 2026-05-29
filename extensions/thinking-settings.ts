@@ -1,5 +1,5 @@
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { ThinkingSelectorComponent, type ExtensionAPI, type ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
@@ -62,6 +62,20 @@ function usage(command: string): string {
   return `Usage: /${command} [${LEVELS.join("|")}] (default: ${DEFAULT_LEVEL}; aliases: 0-5, min, med, h, max)`;
 }
 
+async function selectThinkingLevel(
+  ctx: ExtensionCommandContext,
+  current: ThinkingLevel,
+): Promise<ThinkingLevel | undefined> {
+  return ctx.ui.custom<ThinkingLevel | undefined>((_tui, _theme, _kb, done) =>
+    new ThinkingSelectorComponent(
+      current,
+      LEVELS,
+      (level) => done(level as ThinkingLevel),
+      () => done(undefined),
+    ),
+  );
+}
+
 function currentLine(pi: ExtensionAPI): string {
   return `thinking: ${pi.getThinkingLevel()}`;
 }
@@ -77,16 +91,9 @@ export default function (pi: ExtensionAPI) {
     if (!level) {
       if (!args.trim() && ctx.hasUI) {
         const current = pi.getThinkingLevel() || DEFAULT_LEVEL;
-        const options = [
-          current,
-          ...LEVELS.filter((candidate) => candidate !== current),
-        ];
-        const choice = await ctx.ui.select(
-          `Thinking level (currently ${current})`,
-          options,
-        );
+        const choice = await selectThinkingLevel(ctx, current);
         if (!choice) return;
-        level = choice as ThinkingLevel;
+        level = choice;
       } else if (!args.trim()) {
         level = DEFAULT_LEVEL;
       } else {
