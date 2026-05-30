@@ -1,14 +1,33 @@
 {
-  "lastChangelogVersion": "0.70.2",
-  "defaultProvider": "openrouter",
-  "defaultModel": "deepseek/deepseek-v4-flash",
-  "defaultThinkingLevel": "high",
-  "hideThinkingBlock": false,
-  "theme": "darkearth-pi",
+  "lastChangelogVersion": "0.77.0",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "medium",
+  "hideThinkingBlock": true,
+  "theme": "lightearth-pi",
   "images": {
     "autoResize": false
   },
   "packages": [
-    "npm:@mjakl/pi-subagent"
-  ]
+    "npm:pi-hermes-memory@0.7.10",
+    "npm:pi-rtk-optimizer@0.7.1",
+    "npm:pi-bar@0.3.38",
+    {
+      "source": "~/projects/skills/packages/pi-notify",
+      "extensions": [
+        "extensions/pi-notify.ts"
+      ]
+    },
+    "npm:@latentminds/pi-quotas@0.2.6",
+    "npm:@howaboua/pi-codex-conversion@1.5.11",
+    "npm:pi-codex-goal@0.1.11",
+    "npm:@tmustier/pi-ralph-wiggum@0.2.1",
+    "npm:@mjakl/pi-subagent@2.1.0"
+  ],
+  "extensions": [
+    "~/projects/agents/extensions/thinking-settings.ts"
+  ],
+  "compaction": {
+    "enabled": true
+  }
 }

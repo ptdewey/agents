@@ -8,7 +8,8 @@ import {
 export default definePlugins({
   // Seeded from /Users/patrick.dewey/.pi/agent/settings.json.
   plugins: [
-    npm("pi-subagents"),
+    // npm("pi-subagents"),
+    npm("@mjakl/pi-subagent"),
     npm("pi-hermes-memory"),
     npm("pi-rtk-optimizer"),
     npm("pi-bar"),

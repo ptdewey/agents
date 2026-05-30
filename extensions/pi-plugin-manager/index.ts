@@ -1106,7 +1106,7 @@ type LoadingResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: unknown };
 
-async function withLoadingPopup<T>(
+async function withLoadingWindow<T>(
   ctx: ExtensionCommandContext,
   message: string,
   operation: () => Promise<T>,
@@ -1127,14 +1127,6 @@ async function withLoadingPopup<T>(
 
       return loader;
     },
-    {
-      overlay: true,
-      overlayOptions: {
-        anchor: "center",
-        width: 52,
-        maxHeight: 8,
-      },
-    },
   );
 
   if (result.ok) return result.value;
@@ -1153,7 +1145,7 @@ async function sync(
   ctx: ExtensionCommandContext,
   reload: boolean,
 ): Promise<void> {
-  const plan = await withLoadingPopup(
+  const plan = await withLoadingWindow(
     ctx,
     "Resolving plugin pins...",
     () => buildPlan(),
@@ -1254,7 +1246,7 @@ export default function piPluginManager(pi: ExtensionAPI) {
           }
 
           case "plan": {
-            const plan = await withLoadingPopup(
+            const plan = await withLoadingWindow(
               ctx,
               "Resolving plugin pins...",
               () => buildPlan(),
@@ -1272,7 +1264,7 @@ export default function piPluginManager(pi: ExtensionAPI) {
             return;
 
           case "update": {
-            const plan = await withLoadingPopup(
+            const plan = await withLoadingWindow(
               ctx,
               "Refreshing plugin pins...",
               () => buildPlan({ refreshLocks: true }),
@@ -1290,7 +1282,7 @@ export default function piPluginManager(pi: ExtensionAPI) {
           }
 
           case "status": {
-            const plan = await withLoadingPopup(
+            const plan = await withLoadingWindow(
               ctx,
               "Resolving plugin pins...",
               () => buildPlan(),

@@ -9,7 +9,6 @@ targets = [
     "~/.pi/agent/skills", 
     "~/.claude/skills", 
     "~/.codex/skills",
-    "~/.agents/skills",
     "~/.config/opencode/skill",
 ]
 

@@ -2,6 +2,31 @@
 
 A collection of agent skills, subagents, and general coding agent settings that I've made or found useful.
 
+## Pi subagents
+
+Reusable subagent definitions live in `agents/*.md`. My global Pi config has
+`~/.pi/agent/agents` symlinked to this directory, so these agents are available
+from any project when `@mjakl/pi-subagent` is installed.
+
+Current agents:
+
+- `explorer` — read-only repository reconnaissance and evidence-backed context gathering.
+- `researcher` — evidence-first technical research against repo docs/source/dependencies.
+- `worker` — focused implementation work when the task is clear enough to execute.
+- `builder` — implementation-builder alias for vertical slices and plan execution.
+
+Example delegation prompts:
+
+```text
+Use the explorer subagent to find where auth middleware is configured.
+Use the researcher subagent to verify how this SDK handles retries.
+Use the worker subagent to implement the focused fix described above.
+Use the builder subagent to build the smallest vertical slice for this feature.
+```
+
+For isolated runs, prefer `mode: "spawn"`; use `mode: "fork"` only when the
+subagent needs the current conversation context.
+
 ## Pi notify package (macOS)
 
 `packages/pi-notify/` is a local Pi package (not auto-loaded from this repo's top-level `extensions/` folder).
