@@ -38,4 +38,38 @@ When working in Go codebases, always do the following:
 - Use `go run .` or `go run ./cmd/foo` instead of `go build` to
   run programs, to avoid leaving behind build artifacts.
 
+## Code comments
+
+Default to no new implementation comments.
+
+Prefer clear names, small functions, explicit types, and extracted helpers over
+comments. Before adding a comment, first consider whether the code can be made
+self-explanatory.
+
+A comment is justified only when it records information the code cannot express:
+
+- The rationale or trade-off behind a non-obvious decision.
+- A non-obvious invariant, precondition, or correctness constraint.
+- An external API, protocol, compatibility, vendor, or platform limitation.
+- A security or performance decision whose motivation is not apparent.
+- Required public API documentation.
+- A concise explanation of unusually difficult mathematics or algorithms.
+
+Do not add comments that:
+
+- Narrate control flow or restate the following code.
+- Describe assignments, loops, conditionals, returns, or function calls.
+- Use headings such as "Step 1", "Initialize", "Process", or "Handle result".
+- Record task history, recent changes, or what was "added" or "updated".
+- Compensate for unclear naming or unnecessarily complicated structure.
+- Leave dead or previous code commented out.
+- Add boilerplate docstrings to private functions whose signature is sufficient.
+- Label test sections with Arrange, Act, or Assert unless the repository requires it.
+
+When modifying existing code, preserve useful comments but remove comments made
+obsolete by your change.
+
+Before finishing, inspect the comments added in the git diff. Delete every new
+comment that does not satisfy one of the allowed cases above.
+
 @RTK.md

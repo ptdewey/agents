@@ -37,10 +37,6 @@ name = "learning-opportunities"
 source = "skills/learning-opportunities"
 
 [[skills]]
-name = "nix-go-vendor-hash"
-source = "skills/nix-go-vendor-hash"
-
-[[skills]]
 name = "skill-temporal-developer"
 source = "skills/skill-temporal-developer"
 
@@ -79,3 +75,14 @@ source = "skills/improve-codebase-architecture"
 [[skills]]
 name = "finger-guns"
 source = "skills/finger-guns"
+
+[[skills]]
+name = "code-review"
+source = "skills/code-review"
+
+# [[skills]]
+# name = "jj-surgeon"
+# source = "github:mvzink/jj-hunk-tool"
+# path = "skills/jj-surgeon/SKILL.md"
+# origin_tool = "npx skills"
+# origin_source_type = "github"
