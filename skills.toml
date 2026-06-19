@@ -75,3 +75,7 @@ source = "skills/tdd"
 [[skills]]
 name = "improve-codebase-architecture"
 source = "skills/improve-codebase-architecture"
+
+[[skills]]
+name = "finger-guns"
+source = "skills/finger-guns"
