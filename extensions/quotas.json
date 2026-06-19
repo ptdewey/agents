@@ -4,5 +4,5 @@
   "providerCommands": true,
   "usageStatus": true,
   "quotaWarnings": true,
-  "deferToSynthetic": true
+  "deferToSynthetic": false
 }
