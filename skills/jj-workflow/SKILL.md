@@ -18,7 +18,7 @@ test -d .jj && echo "jj repo" || echo "not jj"
 When working in jj repos:
 
 1. **Use jj, not git** - Don't use `git add`, `git commit`, `git stash`, `git checkout`, `git reset`, or `git rebase`
-2. **Use `wip:` prefix** - When describing changes, prefix with `wip:` so the user can write a final message later
+2. **Describe changes plainly** - Do not prefix descriptions with `wip:` unless the change is explicitly experimental or the user asks for it
 3. **Never push** - Leave `jj git push` to the user
 4. **No staging area** - jj snapshots the working copy automatically, there's no `git add`
 5. **Don't revert unless asked** - Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes. In parallel agent runs, status may include another agent's work.
@@ -62,7 +62,7 @@ jj log -r ::@            # Current change and ancestors
 
 ```bash
 jj new                   # Start a new change on top of current
-jj desc -m "wip: msg"    # Set description (always use wip: prefix)
+jj desc -m "msg"         # Set description
 jj edit @-               # Move working copy to parent
 jj squash                # Fold current change into parent
 ```

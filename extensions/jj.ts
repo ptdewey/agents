@@ -19,9 +19,7 @@ const MAX_DESC_LENGTH = 50;
 const STATUS_REFRESH_DEBOUNCE_MS = 750;
 
 type JjSnapshot = {
-  status: string;
   footerStatus: string;
-  contextMessage: string;
 };
 
 function formatTokens(count: number): string {
@@ -144,9 +142,7 @@ function buildJjSnapshot(status: string): JjSnapshot {
   if (truncatedDescription) footerStatus += ` ${truncatedDescription}`;
 
   return {
-    status,
     footerStatus,
-    contextMessage: `**jj repo detected** - Use the \`jj\` tool for version control (not git/bash). Do not use \`jj restore\` or \`jj abandon\` unless the user explicitly asks you to revert changes. Treat unrelated existing changes as read-only unless told otherwise.\n\nCurrent change: ${changeLine}\n\nStatus:\n\`\`\`\n${status.trim()}\n\`\`\``,
   };
 }
 
@@ -238,14 +234,11 @@ async function fetchJjSnapshot(
     return null;
   }
 
-  const { stdout, stderr, code: statusCode } = await pi.exec("jj", ["st"]);
+  const { stdout, code: statusCode } = await pi.exec("jj", ["st"]);
   if (statusCode !== 0) {
     if (ctx.hasUI) ctx.ui.setStatus("jj", "status unavailable");
     return {
-      status: stderr || "jj st failed",
       footerStatus: "status unavailable",
-      contextMessage:
-        "**jj repo detected** - Use the `jj` tool for version control (not git/bash). Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes. Treat unrelated existing changes as read-only unless told otherwise.",
     };
   }
 
@@ -293,10 +286,10 @@ export default function (pi: ExtensionAPI) {
     name: "jj",
     label: "jj",
     description:
-      "Run jj (Jujutsu) version control commands. Push commands are disabled - leave pushing to the user.",
-    promptSnippet: "Run jj commands (push disabled)",
+      "Run jj (Jujutsu) version-control commands for explicit VCS tasks. Push commands are disabled - leave pushing to the user.",
+    promptSnippet: "Run jj commands for explicit version-control operations only",
     promptGuidelines: [
-      "Use the jj tool instead of bash for jj commands in repos with .jj/ directory",
+      "When you need version-control information or operations in a .jj repo, use the jj tool rather than shelling out to jj",
       "Never push - leave `jj git push` to the user",
       "Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes",
       "Treat unrelated existing changes as read-only unless told otherwise; user or another agent may have made them",
@@ -408,26 +401,14 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // Inject jj context at agent start
-  pi.on("before_agent_start", async (_event, ctx) => {
-    const snapshot = await refreshSnapshot(ctx, false);
-    if (!snapshot) return;
-
-    return {
-      message: {
-        customType: "jj-context",
-        content: snapshot.contextMessage,
-        display: false,
-      },
-    };
-  });
-
-  // Update status widget on session start
+  // Install the footer/status on session start. This is UI-only: it refreshes
+  // the pi-bar extension status so the current jj rev is visible immediately,
+  // but does not inject the full jj status into the agent prompt.
   pi.on("session_start", async (_event, ctx) => {
     const snapshot = await refreshSnapshot(ctx, true);
-    if (snapshot) {
-      installJjFooter(ctx);
-    }
+    if (!snapshot) return;
+
+    installJjFooter(ctx);
   });
 
   // Update status widget after tool calls that may change the working copy

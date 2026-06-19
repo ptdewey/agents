@@ -14,19 +14,14 @@
     "npm:pi-bar@0.3.38",
     {
       "source": "~/projects/skills/packages/pi-notify",
-      "extensions": [
-        "extensions/pi-notify.ts"
-      ]
+      "extensions": ["extensions/pi-notify.ts"]
     },
     "npm:@latentminds/pi-quotas@0.2.6",
     "npm:@howaboua/pi-codex-conversion@1.5.11",
     "npm:pi-codex-goal@0.1.11",
-    "npm:@tmustier/pi-ralph-wiggum@0.2.1",
     "npm:@mjakl/pi-subagent@2.1.0"
   ],
-  "extensions": [
-    "~/projects/agents/extensions/thinking-settings.ts"
-  ],
+  "extensions": ["~/projects/agents/extensions/thinking-settings.ts"],
   "compaction": {
     "enabled": true
   }

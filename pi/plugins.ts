@@ -11,7 +11,7 @@ export default definePlugins({
     // npm("pi-subagents"),
     npm("@mjakl/pi-subagent"),
     npm("pi-hermes-memory"),
-    npm("pi-rtk-optimizer"),
+    // npm("pi-rtk-optimizer"),
     npm("pi-bar"),
     local("~/projects/agents/extensions/thinking-settings.ts"),
     local("~/projects/skills/packages/pi-notify", {
@@ -23,6 +23,5 @@ export default definePlugins({
     npm("@latentminds/pi-quotas"),
     npm("@howaboua/pi-codex-conversion"),
     npm("pi-codex-goal"),
-    npm("@tmustier/pi-ralph-wiggum"),
   ],
 });
