@@ -9,7 +9,6 @@ targets = [
     "~/.pi/agent/skills", 
     "~/.claude/skills", 
     "~/.codex/skills",
-    "~/.config/opencode/skill",
 ]
 
 [[skills]]
@@ -79,10 +78,3 @@ source = "skills/finger-guns"
 [[skills]]
 name = "code-review"
 source = "skills/code-review"
-
-# [[skills]]
-# name = "jj-surgeon"
-# source = "github:mvzink/jj-hunk-tool"
-# path = "skills/jj-surgeon/SKILL.md"
-# origin_tool = "npx skills"
-# origin_source_type = "github"
