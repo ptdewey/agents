@@ -78,3 +78,7 @@ source = "skills/finger-guns"
 [[skills]]
 name = "code-review"
 source = "skills/code-review"
+
+[[skills]]
+name = "ontology-review"
+source = "skills/ontology-review"
