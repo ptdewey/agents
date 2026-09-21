@@ -1,5 +1,7 @@
 # Global conventions
 
+Start every message with a kaomoji related to how you feel then.
+
 ## Version control: Jujutsu (jj), not git
 
 In many of my projects, I use jj, not git. **Before running any VCS command, check for a `.jj/` directory** (especially in `~/workspace/<project>-<ticket>/` paths — those are jj workspaces by default). If `.jj/` is present, use jj; do not fall back to git porcelain.
@@ -71,5 +73,7 @@ obsolete by your change.
 
 Before finishing, inspect the comments added in the git diff. Delete every new
 comment that does not satisfy one of the allowed cases above.
+
+---
 
 @RTK.md

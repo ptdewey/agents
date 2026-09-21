@@ -19,10 +19,9 @@ When working in jj repos:
 
 1. **Use jj, not git** - Don't use `git add`, `git commit`, `git stash`, `git checkout`, `git reset`, or `git rebase`
 2. **Describe changes plainly** - Do not prefix descriptions with `wip:` unless the change is explicitly experimental or the user asks for it
-3. **Never push** - Leave `jj git push` to the user
-4. **No staging area** - jj snapshots the working copy automatically, there's no `git add`
-5. **Don't revert unless asked** - Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes. In parallel agent runs, status may include another agent's work.
-6. **Preserve unrelated edits** - Treat unrelated existing changes as read-only unless told otherwise; if touching the same code, preserve unrelated edits while making the requested change.
+3. **No staging area** - jj snapshots the working copy automatically, there's no `git add`
+4. **Don't revert unless asked** - Do not use `jj restore` or `jj abandon` unless the user explicitly asks you to revert changes. In parallel agent runs, status may include another agent's work.
+5. **Preserve unrelated edits** - Treat unrelated existing changes as read-only unless told otherwise; if touching the same code, preserve unrelated edits while making the requested change.
 
 ## Core Concepts
 
@@ -92,8 +91,8 @@ jj bookmark delete <name>           # Delete bookmark
 
 ```bash
 jj git fetch             # Fetch from remote
-jj git push              # Push (USER ONLY - agent should not run this)
-jj git push --allow-new  # Push new bookmark (USER ONLY)
+jj git push              # Push (don't run unless the user asked for changes to be pushed)
+jj git push --allow-new  # Push new bookmark (don't run unless the user asked for changes to be pushed)
 ```
 
 ### Recovery with Op Log
@@ -135,9 +134,9 @@ The user handles shipping themselves:
 
 ```bash
 jj desc -m "final message"        # Write final commit message
-jj bookmark set <name> -r @       # Set bookmark  
+jj bookmark set <name> -r @       # Set bookmark
 jj git push                       # Push (--allow-new if new bookmark)
 jj new                            # Start next change
 ```
 
-**Agent should not run the push step.**
+**Agent should not run the push step unless requested by the user.**
